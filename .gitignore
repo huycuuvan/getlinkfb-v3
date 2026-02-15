@@ -1,0 +1,9 @@
+node_modules/
+cookies.json
+service_account.json
+config.json
+.env
+*.png
+*.log
+.DS_Store
+.vscode/
