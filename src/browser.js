@@ -328,19 +328,6 @@ async function scrapeUserProfile(psid, pageId) {
         if (userData && userData.profileLink) {
             console.log(`Successfully extracted: ${userData.name} - ${userData.profileLink}`);
 
-            // --- TỰ ĐỘNG REFRESH COOKIES (ROLLING COOKIES) ---
-            try {
-                const currentCookies = await context.cookies();
-                fs.writeFileSync(cookiesPath, JSON.stringify({
-                    url: 'https://www.facebook.com',
-                    cookies: currentCookies
-                }, null, 2));
-                console.log('[Rolling Cookies] Cookies have been updated for next session.');
-            } catch (err) {
-                console.error('[Rolling Cookies] Failed to save updated cookies:', err.message);
-            }
-            // ------------------------------------------------
-
             await page.waitForTimeout(3000);
             return userData;
         }
