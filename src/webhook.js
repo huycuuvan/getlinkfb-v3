@@ -1,5 +1,6 @@
 const axios = require('axios');
 const { scrapeUserProfile } = require('./browser');
+const { getUserFromGraphAPI } = require('./graph-api');
 const { appendToSheet } = require('./sheets');
 
 // CẤU HÌNH HÀNG ĐỢI (QUEUE) ĐỂ CHỐNG TREO MÁY
@@ -40,6 +41,12 @@ const handleWebhook = async (req, res, config) => {
 
             for (const webhook_event of events) {
                 const sender_psid = webhook_event.sender.id;
+
+                // BỎ QUA nếu người gửi chính là Page (Page tự nhắn hoặc bot rep)
+                if (sender_psid === pageId) {
+                    console.log(`[Webhook] Ignoring message from Page itself (${pageId})`);
+                    continue;
+                }
 
                 if (webhook_event.message && !webhook_event.message.is_echo) {
                     const messageText = webhook_event.message.text || "";
@@ -144,40 +151,74 @@ async function sendToN8N(payload) {
 
 async function processMessage(psid, pageConfig, pageId, messageText, messageId, timestamp) {
     const phoneNumber = extractPhoneNumber(messageText);
+    const accessToken = pageConfig.page_access_token;
 
-    console.log(`[Scraper] Starting: ${psid} on Page: ${pageId}...`);
-    const userData = await scrapeUserProfile(psid, pageId);
+    // ===== BƯỚC 1: GRAPH API lấy TÊN (nhanh, ~1 giây) =====
+    console.log(`[Process] Starting for PSID: ${psid} on Page: ${pageId}`);
+    let graphName = null;
 
-    if (userData && userData.profileLink) {
-        const isMessengerUser = userData.name.includes("Người dùng Messenger") || userData.name === "Khách hàng" || userData.name === "Hộp thư";
-        const isLoginLink = userData.profileLink.includes('login.php') || userData.profileLink.includes('checkpoint');
-
-        console.log(`[Scraper] Success: ${userData.name} - ${userData.profileLink}`);
-
-        await appendToSheet(
-            [new Date().toLocaleString(), psid, userData.name, userData.profileLink, phoneNumber, pageConfig.name],
-            pageConfig.spreadsheet_id,
-            pageConfig.sheet_name
-        );
-
-        if (!isMessengerUser && !isLoginLink) {
-            const n8nPayload = {
-                "source": "Inbox",
-                "page_id": pageId,
-                "ps_id": psid,
-                "m_id": messageId,
-                "time_stamp": timestamp,
-                "customer_name": userData.name,
-                "customer_facebook_url": userData.profileLink,
-                "text": messageText,
-                "extracted_phone_number": phoneNumber
-            };
-            await sendToN8N(n8nPayload);
-        } else {
-            console.log(`[Scraper] Skipping N8N for ${psid} (Invalid data)`);
+    try {
+        const graphData = await getUserFromGraphAPI(psid, pageId, accessToken);
+        if (graphData && graphData.name) {
+            graphName = graphData.name;
         }
+    } catch (e) {
+        console.log(`[Process] Graph API failed, will rely on browser: ${e.message}`);
+    }
+
+    // ===== BƯỚC 2: TRÌNH DUYỆT lấy PROFILE LINK (chậm hơn, ~15-30 giây) =====
+    console.log(`[Process] Scraping profile link for ${psid}...`);
+    let browserData = null;
+
+    try {
+        browserData = await scrapeUserProfile(psid, pageId);
+    } catch (e) {
+        console.log(`[Process] Browser scrape failed: ${e.message}`);
+    }
+
+    // ===== BƯỚC 3: KẾT HỢP KẾT QUẢ =====
+    // Ưu tiên: Graph API name > Browser name > "Khách hàng"
+    const finalName = graphName || (browserData && browserData.name) || "Khách hàng";
+    const finalProfileLink = (browserData && browserData.profileLink) || "";
+
+    console.log(`[Process] 📊 KẾT QUẢ:`);
+    console.log(`  Tên: ${finalName} (nguồn: ${graphName ? 'Graph API ✅' : browserData?.name ? 'Browser' : 'Mặc định'})`);
+    console.log(`  Link: ${finalProfileLink || 'KHÔNG CÓ'} (nguồn: ${finalProfileLink ? 'Browser ✅' : 'N/A'})`);
+
+    // Kiểm tra dữ liệu
+    const isMessengerUser = finalName.includes("Người dùng Messenger") || finalName === "Khách hàng" || finalName === "Hộp thư";
+    const isLoginLink = finalProfileLink.includes('login.php') || finalProfileLink.includes('checkpoint');
+    const hasValidData = finalName !== "Khách hàng" || finalProfileLink;
+
+    if (!hasValidData) {
+        throw new Error("No data extracted from both Graph API and Browser");
+    }
+
+    // Luôn lưu vào Google Sheet (dù có profile link hay không)
+    await appendToSheet(
+        [new Date().toLocaleString(), psid, finalName, finalProfileLink || "N/A", phoneNumber, pageConfig.name],
+        pageConfig.spreadsheet_id,
+        pageConfig.sheet_name
+    );
+
+    // Gửi N8N nếu dữ liệu hợp lệ (có tên thật + có profile link)
+    if (!isMessengerUser && !isLoginLink && finalProfileLink) {
+        const n8nPayload = {
+            "source": "Inbox",
+            "page_id": pageId,
+            "ps_id": psid,
+            "m_id": messageId,
+            "time_stamp": timestamp,
+            "customer_name": finalName,
+            "customer_facebook_url": finalProfileLink,
+            "text": messageText,
+            "extracted_phone_number": phoneNumber
+        };
+        await sendToN8N(n8nPayload);
+    } else if (!finalProfileLink) {
+        console.log(`[Process] Saved to Sheet but skipping N8N (no profile link)`);
     } else {
-        throw new Error("No data extracted");
+        console.log(`[Process] Skipping N8N for ${psid} (Invalid data)`);
     }
 }
 
