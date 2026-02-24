@@ -3,15 +3,18 @@ const fs = require('fs');
 const path = require('path');
 
 async function scrapeUserProfile(psid, pageId) {
-    const cookiesPath = process.env.FB_COOKIES_PATH || './cookies.json';
-    const isHeadless = false; // Bật màn hình lên để debug
+    const cookiesPath = process.env.FB_COOKIES_PATH || path.resolve(__dirname, '../cookies.json');
+    // Mặc định chạy ẩn (headless) trên server, có thể chỉnh qua biến môi trường
+    const isHeadless = process.env.HEADLESS !== 'false';
 
     const browser = await chromium.launch({
         headless: isHeadless,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage'
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--font-render-hinting=none'
         ]
     });
 
