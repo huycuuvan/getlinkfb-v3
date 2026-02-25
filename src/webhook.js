@@ -10,8 +10,21 @@ let activeWorkers = 0;
 const MAX_CONCURRENT = 1;
 const processingPsids = new Set();
 let accountIndex = 0; // Biến xoay vòng tài khoản
+const fs = require('fs');
 const history = []; // Lưu lại lịch sử 20 message gần nhất
 const profileCache = new Map(); // Bộ nhớ đệm PSID -> profileLink
+const CACHE_FILE = path.resolve(__dirname, '../profile_cache.json');
+
+// NẠP CACHE TỪ FILE KHI KHỞI ĐỘNG
+try {
+    if (fs.existsSync(CACHE_FILE)) {
+        const savedCache = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+        Object.entries(savedCache).forEach(([k, v]) => profileCache.set(k, v));
+        console.log(`[Cache] Loaded ${profileCache.size} profiles from disk.`);
+    }
+} catch (e) {
+    console.log(`[Cache] Initialize error: ${e.message}`);
+}
 
 function getSystemStatus() {
     return {
@@ -211,11 +224,15 @@ async function processMessage(psid, pageConfig, pageId, messageText, messageId, 
 
                     // CẬP NHẬT CACHE & BẢO VỆ RAM
                     if (finalProfileLink) {
-                        // Nếu bộ nhớ quá lớn (> 1000 khách), xóa bớt để giải phóng RAM
                         if (profileCache.size > 1000) profileCache.clear();
-
                         profileCache.set(psid, finalProfileLink);
-                        console.log(`[Process] 💾 Cache Updated for ${psid}`);
+
+                        // LƯU XUỐNG DISK ĐỂ KHÔNG MẤT KHI RESTART
+                        try {
+                            const cacheObj = Object.fromEntries(profileCache);
+                            fs.writeFileSync(CACHE_FILE, JSON.stringify(cacheObj, null, 2), 'utf8');
+                            console.log(`[Process] 💾 Cache Saved to Disk for ${psid}`);
+                        } catch (ce) { }
                     }
                     break;
                 } else {

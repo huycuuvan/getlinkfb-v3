@@ -19,10 +19,31 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName) {
         ]
     });
 
+    // ===== GIẢ LẬP THIẾT BỊ (Anti-Fingerprinting) =====
+    const userAgents = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0"
+    ];
+    const randomUA = userAgents[Math.floor(Math.random() * userAgents.length)];
+    const viewports = [
+        { width: 1920, height: 1080 },
+        { width: 1366, height: 768 },
+        { width: 1536, height: 864 }
+    ];
+    const randomVP = viewports[Math.floor(Math.random() * viewports.length)];
+
     const context = await browser.newContext({
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-        viewport: { width: 1280, height: 800 } // Đảm bảo đủ rộng để hiện Right Panel
+        userAgent: randomUA,
+        viewport: randomVP,
+        locale: 'vi-VN',
+        timezoneId: 'Asia/Ho_Chi_Minh'
     });
+
+    // Tắt timeout mặc định để chạy ổn định hơn
+    context.setDefaultTimeout(60000);
+    const page = await context.newPage();
 
     // Load cookies if exist
     if (fs.existsSync(cookiesPath)) {
@@ -54,8 +75,6 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName) {
         await context.addCookies(formattedCookies);
         console.log('Cookies loaded from cookies.json');
     }
-
-    const page = await context.newPage();
 
     // Chuyển log từ trình duyệt về terminal để dễ debug
     page.on('console', msg => {
