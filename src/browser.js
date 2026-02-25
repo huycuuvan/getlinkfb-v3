@@ -126,16 +126,17 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName) {
 
         console.log(`[Scraper] ✅ UI ready. Performing direct extraction...`);
 
-        // 1. DỌN DẸP NHANH (Bấm Esc và đóng bảng thông báo/cuộc gọi nếu có)
+        // 1. DỌN DẸP NHANH (Bấm Esc và chỉ đóng các Hộp thoại thực sự che mắt)
         try {
             await page.keyboard.press('Escape');
             await page.waitForTimeout(1000);
 
-            // Tìm các nút Đóng, Từ chối (thường dùng cho cuộc gọi/thông báo đè)
-            const obstructiveButtons = page.locator('button:has-text("Xong"), div[role="button"]:has-text("Xong"), button:has-text("Từ chối"), button:has-text("Đóng"), div[aria-label="Đóng"], div[aria-label="Close"]').first();
-            if (await obstructiveButtons.isVisible()) {
-                console.log(`[Scraper] 🚨 Clearing obstruction...`);
-                await obstructiveButtons.click({ force: true });
+            // Chỉ tìm nút trong khung Dialog/Modal để tránh click nhầm nút hệ thống bên ngoài
+            const dialogClose = page.locator('div[role="dialog"] button:has-text("Xong"), div[role="dialog"] [role="button"]:has-text("Xong"), div[role="dialog"] button:has-text("Đóng"), div[role="dialog"] [aria-label="Đóng"]').first();
+
+            if (await dialogClose.isVisible()) {
+                console.log(`[Scraper] 🚨 Closing pop-up dialog...`);
+                await dialogClose.click({ force: true });
                 await page.waitForTimeout(1000);
             }
         } catch (e) { }
