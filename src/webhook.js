@@ -11,6 +11,7 @@ const MAX_CONCURRENT = 1;
 const processingPsids = new Set();
 let accountIndex = 0; // Biến xoay vòng tài khoản
 const history = []; // Lưu lại lịch sử 20 message gần nhất
+const profileCache = new Map(); // Bộ nhớ đệm PSID -> profileLink
 
 function getSystemStatus() {
     return {
@@ -176,42 +177,55 @@ async function processMessage(psid, pageConfig, pageId, messageText, messageId, 
         console.log(`[Process] Graph API failed: ${e.message}`);
     }
 
-    // ===== BƯỚC 2: XOAY VÒNG & NHẢY TÀI KHOẢN (Account Hopping) =====
-    let finalProfileLink = "";
+    // ===== BƯỚC 2: KIỂM TRA CACHE & XOAY VÒNG TÀI KHOẢN =====
+    let finalProfileLink = profileCache.get(psid) || "";
     let browserName = "";
 
-    const accounts = require('../config.json').accounts || [];
-    const maxAttempts = Math.min(accounts.length, 3); // Thử tối đa 3 nick khác nhau
-    let attempt = 0;
+    if (finalProfileLink) {
+        console.log(`[Process] ⚡ Cache Hit! Using stored link for ${psid}: ${finalProfileLink}`);
+    } else {
+        const accounts = require('../config.json').accounts || [];
+        const maxAttempts = Math.min(accounts.length, 3);
+        let attempt = 0;
 
-    while (attempt < maxAttempts) {
-        let selectedAccount = null;
-        let cookiePath = null;
+        while (attempt < maxAttempts) {
+            let selectedAccount = null;
+            let cookiePath = null;
 
-        if (accounts.length > 0) {
-            selectedAccount = accounts[accountIndex % accounts.length];
-            cookiePath = path.resolve(__dirname, '..', selectedAccount.cookie_file);
-            accountIndex++; // Xoay vòng cho lượt sau
-            console.log(`[Process] Account Attempt ${attempt + 1}/${maxAttempts}: ${selectedAccount.name}`);
-        } else {
-            cookiePath = path.resolve(__dirname, '../cookies.json');
-            console.log(`[Process] No accounts found, using default cookies.json`);
-            attempt = maxAttempts; // Không có nick khác để thử
-        }
-
-        try {
-            const browserData = await scrapeUserProfile(psid, pageId, cookiePath, graphName);
-            if (browserData && (browserData.profileLink || browserData.name !== "Khách hàng")) {
-                finalProfileLink = browserData.profileLink || "";
-                browserName = browserData.name || "";
-                break; // THÀNH CÔNG -> Thoát vòng lặp
+            if (accounts.length > 0) {
+                selectedAccount = accounts[accountIndex % accounts.length];
+                cookiePath = path.resolve(__dirname, '..', selectedAccount.cookie_file);
+                accountIndex++;
+                console.log(`[Process] Account Attempt ${attempt + 1}/${maxAttempts}: ${selectedAccount.name}`);
             } else {
-                console.log(`[Process] ⚠️ Account ${selectedAccount?.name} failed (Expired or No data). Trying next...`);
+                cookiePath = path.resolve(__dirname, '../cookies.json');
+                console.log(`[Process] No accounts found, using default cookies.json`);
+                attempt = maxAttempts;
             }
-        } catch (e) {
-            console.log(`[Process] Error with account ${selectedAccount?.name}: ${e.message}`);
+
+            try {
+                const browserData = await scrapeUserProfile(psid, pageId, cookiePath, graphName);
+                if (browserData && (browserData.profileLink || browserData.name !== "Khách hàng")) {
+                    finalProfileLink = browserData.profileLink || "";
+                    browserName = browserData.name || "";
+
+                    // CẬP NHẬT CACHE & BẢO VỆ RAM
+                    if (finalProfileLink) {
+                        // Nếu bộ nhớ quá lớn (> 1000 khách), xóa bớt để giải phóng RAM
+                        if (profileCache.size > 1000) profileCache.clear();
+
+                        profileCache.set(psid, finalProfileLink);
+                        console.log(`[Process] 💾 Cache Updated for ${psid}`);
+                    }
+                    break;
+                } else {
+                    console.log(`[Process] ⚠️ Account ${selectedAccount?.name} failed (Expired or No data). Trying next...`);
+                }
+            } catch (e) {
+                console.log(`[Process] Error with account ${selectedAccount?.name}: ${e.message}`);
+            }
+            attempt++;
         }
-        attempt++;
     }
 
     // ===== BƯỚC 3: KẾT HỢP KẾT QUẢ =====
