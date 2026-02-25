@@ -85,49 +85,39 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName) {
             return null;
         }
 
-        // ===== PHÁT HIỆN TRANG TRẮNG & RELOAD =====
-        // Kiểm tra xem có bất kỳ thẻ div/span nào có nội dung không
-        let hasUI = await page.evaluate(() => {
-            // Tìm các dấu hiệu của UI Meta (có icon, có menu, hoặc có nhiều hơn 50 link)
-            const links = document.querySelectorAll('a').length;
-            const svgs = document.querySelectorAll('svg').length;
-            return links > 10 && svgs > 5;
-        });
+        // ===== KIỂM TRA UI & RELOAD (Phòng chống trang trắng/lag) =====
+        const profileBtn = page.locator('a:has-text("Xem trang cá nhân"), a:has-text("View profile")').first();
 
-        if (!hasUI) {
-            console.log(`[Scraper] ⚠️ Trang trắng hoặc chưa load UI. Đang F5 Reload lần 1...`);
+        try {
+            // Đợi 10 giây xem UI có hiện nút trích xuất không
+            await profileBtn.waitFor({ state: 'visible', timeout: 10000 });
+            console.log(`[Scraper] ✅ UI confirmed (View Profile button detected).`);
+        } catch (e) {
+            console.log(`[Scraper] ⚠️ UI not detected (White page or Lag). Forcing F5 Reload...`);
             await page.reload({ waitUntil: 'domcontentloaded' });
-            await page.waitForTimeout(7000);
+            await page.waitForTimeout(8000); // Đợi Meta load lại
         }
 
-        // Kiểm tra lại lần nữa sau reload
-        hasUI = await page.evaluate(() => {
-            return document.querySelectorAll('a').length > 10;
-        });
-
-        if (!hasUI) {
-            console.log(`[Scraper] ⚠️ Vẫn chưa có UI. Thử điều hướng lại URL trực tiếp...`);
-            await page.goto(inboxUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
-            await page.waitForTimeout(10000);
-        }
-
-        // Kiểm tra login lần cuối
+        // Kiểm tra login sau reload
         currentUrl = page.url();
         if (currentUrl.includes('login') || currentUrl.includes('checkpoint')) {
-            console.log(`[Scraper] ❌ COOKIES HẾT HẠN (thất bại sau reload)`);
+            console.log(`[Scraper] ❌ COOKIES HẾT HẠN (Phát hiện sau Reload)`);
             return null;
         }
 
         console.log(`[Scraper] ✅ UI ready. Performing direct extraction...`);
 
-        // 1. DỌN DẸP NHANH (Bấm Esc và đóng bảng thông báo nếu có)
+        // 1. DỌN DẸP NHANH (Bấm Esc và đóng bảng thông báo/cuộc gọi nếu có)
         try {
             await page.keyboard.press('Escape');
             await page.waitForTimeout(1000);
-            const modalClose = page.locator('div[role="dialog"] button:has-text("Xong"), div[aria-label="Đóng"]').first();
-            if (await modalClose.isVisible()) {
-                await modalClose.click();
-                await page.waitForTimeout(500);
+
+            // Tìm các nút Đóng, Từ chối (thường dùng cho cuộc gọi/thông báo đè)
+            const obstructiveButtons = page.locator('button:has-text("Xong"), div[role="button"]:has-text("Xong"), button:has-text("Từ chối"), button:has-text("Đóng"), div[aria-label="Đóng"], div[aria-label="Close"]').first();
+            if (await obstructiveButtons.isVisible()) {
+                console.log(`[Scraper] 🚨 Clearing obstruction...`);
+                await obstructiveButtons.click({ force: true });
+                await page.waitForTimeout(1000);
             }
         } catch (e) { }
 
@@ -136,20 +126,22 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName) {
         try {
             const btnLink = page.locator('a:has-text("Xem trang cá nhân"), a:has-text("View profile")').first();
 
-            // Đợi nút xuất hiện (Max 10s)
-            await btnLink.waitFor({ state: 'visible', timeout: 10000 });
+            // Đợi nút xuất hiện (Max 12s)
+            await btnLink.waitFor({ state: 'visible', timeout: 12000 });
 
-            // Khoanh đỏ rực rỡ trước khi lấy
+            // Khoanh đỏ rực rỡ
             await btnLink.evaluate(el => {
                 el.style.outline = '10px solid red';
                 el.style.boxShadow = '0 0 50px red';
+                el.style.zIndex = '9999999';
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
             });
             await page.waitForTimeout(1000);
 
-            // Lấy link
+            // Lấy link - Dùng force: true để click bất chấp bị che khuất
             profileLink = await btnLink.getAttribute('href');
-            console.log(`[Scraper] 🎯 Clicked & Captured: ${profileLink}`);
+            await btnLink.click({ force: true }).catch(() => { });
+            console.log(`[Scraper] 🎯 Captured: ${profileLink}`);
 
         } catch (e) {
             console.log(`[Scraper] ❌ Could not find View Profile link: ${e.message}`);
