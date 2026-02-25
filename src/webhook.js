@@ -54,52 +54,52 @@ const handleWebhook = async (req, res, config) => {
             for (const webhook_event of events) {
                 const sender_psid = webhook_event.sender.id;
 
-                // BỎ QUA nếu người gửi chính là Page (Page tự nhắn hoặc bot rep)
-                if (sender_psid === pageId) {
-                    console.log(`[Webhook] Ignoring message from Page itself (${pageId})`);
+                // 🛑 BỘ LỌC CHẶN TIN NHẮN TỪ PAGE (ECHO FILTER)
+                // Chỉ nhận tin nhắn khách gửi tới (webhook_event.message có tồn tại và KHÔNG phải echo)
+                const isFromCustomer = webhook_event.message && !webhook_event.message.is_echo;
+
+                if (!isFromCustomer) {
+                    // Nếu là tin nhắn Echo (Page rep khách) -> BỎ QUA NGAY
                     continue;
                 }
 
-                if (webhook_event.message && !webhook_event.message.is_echo) {
-                    const messageText = webhook_event.message.text || "";
-                    const messageId = webhook_event.message.mid;
-                    const timestamp = new Date(webhook_event.timestamp).toISOString();
+                const messageText = webhook_event.message.text || "";
+                const messageId = webhook_event.message.mid;
+                const timestamp = new Date(webhook_event.timestamp).toISOString();
 
-                    // 1. Kiểm tra xem khách này có đang được xử lý (Active) không
-                    const isActive = processingPsids.has(sender_psid);
-                    // 2. Kiểm tra xem khách này có đang nằm chờ trong hàng đợi không
-                    const existingTask = queue.find(t => t.psid === sender_psid);
+                // KIỂM SOÁT HÀNG ĐỢI (QUEUE)
+                const isActive = processingPsids.has(sender_psid);
+                const existingTask = queue.find(t => t.psid === sender_psid);
 
-                    if (existingTask) {
-                        console.log(`[Queue] Merging message for ${sender_psid} in queue...`);
-                        existingTask.messageText += ` | ${messageText}`;
-                        existingTask.timestamp = timestamp;
-                    } else if (isActive) {
-                        console.log(`[Queue] User ${sender_psid} is already active. Adding new task to queue.`);
-                        queue.push({
-                            psid: sender_psid,
-                            pageConfig,
-                            pageId,
-                            messageText,
-                            messageId,
-                            timestamp,
-                            retryCount: 0
-                        });
-                    } else {
-                        console.log(`[Queue] Adding message from ${sender_psid} to queue...`);
-                        queue.push({
-                            psid: sender_psid,
-                            pageConfig,
-                            pageId,
-                            messageText,
-                            messageId,
-                            timestamp,
-                            retryCount: 0
-                        });
-                    }
-
-                    processQueue();
+                if (existingTask) {
+                    console.log(`[Queue] Gộp tin nhắn mới từ ${sender_psid} vào hàng đợi...`);
+                    existingTask.messageText += ` | ${messageText}`;
+                    existingTask.timestamp = timestamp;
+                } else if (isActive) {
+                    console.log(`[Queue] Khách ${sender_psid} đang được xử lý. Đẩy tin nhắn mới vào cuối hàng đợi.`);
+                    queue.push({
+                        psid: sender_psid,
+                        pageConfig,
+                        pageId,
+                        messageText,
+                        messageId,
+                        timestamp,
+                        retryCount: 0
+                    });
+                } else {
+                    console.log(`[Queue] Thêm khách ${sender_psid} vào hàng đợi xử lý lần lượt.`);
+                    queue.push({
+                        psid: sender_psid,
+                        pageConfig,
+                        pageId,
+                        messageText,
+                        messageId,
+                        timestamp,
+                        retryCount: 0
+                    });
                 }
+
+                processQueue();
             }
         }
         res.status(200).send('EVENT_RECEIVED');
@@ -176,34 +176,42 @@ async function processMessage(psid, pageConfig, pageId, messageText, messageId, 
         console.log(`[Process] Graph API failed: ${e.message}`);
     }
 
-    // ===== BƯỚC 2: XOAY VÒNG TÀI KHOẢN & LẤY PROFILE LINK =====
+    // ===== BƯỚC 2: XOAY VÒNG & NHẢY TÀI KHOẢN (Account Hopping) =====
     let finalProfileLink = "";
     let browserName = "";
 
-    // XOAY VÒNG TÀI KHOẢN
     const accounts = require('../config.json').accounts || [];
-    let selectedAccount = null;
-    let cookiePath = null;
+    const maxAttempts = Math.min(accounts.length, 3); // Thử tối đa 3 nick khác nhau
+    let attempt = 0;
 
-    if (accounts.length > 0) {
-        selectedAccount = accounts[accountIndex % accounts.length];
-        cookiePath = path.resolve(__dirname, '..', selectedAccount.cookie_file);
-        accountIndex++;
-        console.log(`[Process] Using Account: ${selectedAccount.name} (${selectedAccount.cookie_file})`);
-    } else {
-        cookiePath = path.resolve(__dirname, '../cookies.json');
-        console.log(`[Process] No accounts found, using default cookies.json`);
-    }
+    while (attempt < maxAttempts) {
+        let selectedAccount = null;
+        let cookiePath = null;
 
-    try {
-        // TRUYỀN graphName vào làm "mỏ neo" để trình duyệt kiểm tra đúng người
-        const browserData = await scrapeUserProfile(psid, pageId, cookiePath, graphName);
-        if (browserData) {
-            finalProfileLink = browserData.profileLink || "";
-            browserName = browserData.name || "";
+        if (accounts.length > 0) {
+            selectedAccount = accounts[accountIndex % accounts.length];
+            cookiePath = path.resolve(__dirname, '..', selectedAccount.cookie_file);
+            accountIndex++; // Xoay vòng cho lượt sau
+            console.log(`[Process] Account Attempt ${attempt + 1}/${maxAttempts}: ${selectedAccount.name}`);
+        } else {
+            cookiePath = path.resolve(__dirname, '../cookies.json');
+            console.log(`[Process] No accounts found, using default cookies.json`);
+            attempt = maxAttempts; // Không có nick khác để thử
         }
-    } catch (e) {
-        console.log(`[Process] Browser scrape failed with account ${selectedAccount?.name || 'default'}: ${e.message}`);
+
+        try {
+            const browserData = await scrapeUserProfile(psid, pageId, cookiePath, graphName);
+            if (browserData && (browserData.profileLink || browserData.name !== "Khách hàng")) {
+                finalProfileLink = browserData.profileLink || "";
+                browserName = browserData.name || "";
+                break; // THÀNH CÔNG -> Thoát vòng lặp
+            } else {
+                console.log(`[Process] ⚠️ Account ${selectedAccount?.name} failed (Expired or No data). Trying next...`);
+            }
+        } catch (e) {
+            console.log(`[Process] Error with account ${selectedAccount?.name}: ${e.message}`);
+        }
+        attempt++;
     }
 
     // ===== BƯỚC 3: KẾT HỢP KẾT QUẢ =====
@@ -231,11 +239,11 @@ async function processMessage(psid, pageConfig, pageId, messageText, messageId, 
     });
     if (history.length > 50) history.shift();
 
-    // Gửi N8N nếu dữ liệu hợp lệ (có tên thật + có profile link)
+    // Gửi N8N nếu dữ liệu hợp lệ (có tên thật và KHÔNG phải link lỗi/checkpoint)
     const isMessengerUser = finalName.includes("Người dùng Messenger") || finalName === "Khách hàng" || finalName === "Hộp thư";
-    const isLoginLink = finalProfileLink.includes('login.php') || finalProfileLink.includes('checkpoint');
+    const isLoginLink = finalProfileLink && (finalProfileLink.includes('login.php') || finalProfileLink.includes('checkpoint'));
 
-    if (!isMessengerUser && !isLoginLink && finalProfileLink) {
+    if (!isMessengerUser && !isLoginLink) {
         const n8nPayload = {
             "source": "Inbox",
             "page_id": pageId,
@@ -243,13 +251,13 @@ async function processMessage(psid, pageConfig, pageId, messageText, messageId, 
             "m_id": messageId,
             "time_stamp": timestamp,
             "customer_name": finalName,
-            "customer_facebook_url": finalProfileLink,
+            "customer_facebook_url": finalProfileLink || "N/A", // Gửi N/A nếu không có link
             "text": messageText,
             "extracted_phone_number": phoneNumber
         };
         await sendToN8N(n8nPayload);
     } else {
-        console.log(`[Process] Saved to Sheet but skipping N8N for ${psid} (Invalid data or No Profile Link)`);
+        console.log(`[Process] Skipping N8N for ${psid} (System user or Login/Error link)`);
     }
 }
 

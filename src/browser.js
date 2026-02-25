@@ -118,112 +118,45 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName) {
             return null;
         }
 
-        console.log(`[Scraper] ✅ UI seems ready. Starting name verification...`);
+        console.log(`[Scraper] ✅ UI ready. Performing direct extraction...`);
 
-        // ===== DỌN DẸP POP-UP (Để không che Link) =====
+        // 1. DỌN DẸP NHANH (Bấm Esc và đóng bảng thông báo nếu có)
         try {
-            const btns = page.locator('button:has-text("Xong"), button:has-text("OK"), button:has-text("Đã hiểu"), div[aria-label="Đóng"]');
-            const count = await btns.count();
-            for (let i = 0; i < count; i++) {
-                if (await btns.nth(i).isVisible()) await btns.nth(i).click();
+            await page.keyboard.press('Escape');
+            await page.waitForTimeout(1000);
+            const modalClose = page.locator('div[role="dialog"] button:has-text("Xong"), div[aria-label="Đóng"]').first();
+            if (await modalClose.isVisible()) {
+                await modalClose.click();
+                await page.waitForTimeout(500);
             }
         } catch (e) { }
 
-        // ===== XÁC MINH & ĐỒNG BỘ (Sync UI with URL) =====
-        if (targetName && targetName !== "Khách hàng") {
-            try {
-                console.log(`[Scraper] 🔍 Checking UI sync for: "${targetName}"...`);
-
-                const check = async () => {
-                    return await page.evaluate((expected) => {
-                        const clean = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "").trim();
-                        return clean(document.body.innerText).includes(clean(expected));
-                    }, targetName);
-                };
-
-                let isOk = await check();
-                if (!isOk) {
-                    console.log(`[Scraper] ⚠️ UI lag detected. Forcing F5 to sync with URL ID...`);
-                    await page.reload({ waitUntil: 'domcontentloaded' });
-                    await page.waitForTimeout(10000); // Đợi Meta load lại đúng người
-                }
-            } catch (e) {
-                console.log(`[Scraper] Sync check skipped: ${e.message}`);
-            }
-        }
-
-        // ===== TRÍCH XUẤT TÊN & LINK (Final Extraction) =====
+        // 2. TÌM VÀ CLICK "XEM TRANG CÁ NHÂN"
         let profileLink = "";
-        let extractedName = targetName || "";
-
         try {
-            console.log(`[Scraper] Extracting profile link...`);
-            const profileLocator = page.locator('a:has-text("Xem trang cá nhân"), a:has-text("View profile")').first();
-            await profileLocator.waitFor({ state: 'visible', timeout: 15000 });
-            profileLink = await profileLocator.getAttribute('href') || "";
+            const btnLink = page.locator('a:has-text("Xem trang cá nhân"), a:has-text("View profile")').first();
 
-            if (profileLink && !profileLink.startsWith('http')) {
-                profileLink = 'https://www.facebook.com' + profileLink;
-            }
+            // Đợi nút xuất hiện (Max 10s)
+            await btnLink.waitFor({ state: 'visible', timeout: 10000 });
+
+            // Khoanh đỏ rực rỡ trước khi lấy
+            await btnLink.evaluate(el => {
+                el.style.outline = '10px solid red';
+                el.style.boxShadow = '0 0 50px red';
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
+            await page.waitForTimeout(1000);
+
+            // Lấy link
+            profileLink = await btnLink.getAttribute('href');
+            console.log(`[Scraper] 🎯 Clicked & Captured: ${profileLink}`);
+
         } catch (e) {
-            console.log(`[Scraper] Link not found. Trying one last fallback...`);
-            const fallbackLink = page.locator('a[href*="facebook.com/"]:not([href*="business.facebook.com"]):not([href*="/help/"])').first();
-            profileLink = await fallbackLink.getAttribute('href').catch(() => "") || "";
-        }
-
-        // Nếu chưa có tên, cố gắng lấy từ UI
-        if (!extractedName || extractedName === "Khách hàng") {
-            try {
-                const chatHeader = page.locator('div[role="main"] header span, div[role="main"] h2').first();
-                const headerText = await chatHeader.innerText({ timeout: 5000 }).catch(() => "");
-                if (headerText) {
-                    extractedName = headerText.replace(/color:red;.*|Nếu ai đó bảo bạn.*|-webkit-text-stroke.*/gi, '').split('\n')[0].trim();
-                }
-            } catch (e) { }
-        }
-
-        // Cách 2: Tìm tên bên cạnh "Xem trang cá nhân" 
-        if (!extractedName) {
-            try {
-                extractedName = await page.evaluate(() => {
-                    const nameBlacklist = [
-                        'Tìm hiểu thêm', 'Facebook', 'Xem trang cá nhân', 'Xem bình luận',
-                        'Hộp thư', 'Kết nối', 'Messenger', 'Instagram', 'WhatsApp',
-                        'Chi tiết liên hệ', 'Trang cá nhân', 'Hoạt động', 'Chia sẻ dữ liệu',
-                        'Bổ sung', 'Thêm chi tiết', 'Khuyến dùng', 'Quản lý', 'Giai đoạn',
-                        'Trạng thái', 'Tiếp nhận', 'Tạo đơn', 'Đánh dấu'
-                    ];
-
-                    // Tìm link "Xem trang cá nhân" rồi bò lên
-                    const allLinks = Array.from(document.querySelectorAll('a'));
-                    const vpLink = allLinks.find(a => (a.innerText || "").includes('Xem trang cá nhân') || (a.innerText || "").includes('View profile'));
-
-                    if (vpLink) {
-                        let curr = vpLink;
-                        for (let i = 0; i < 8; i++) {
-                            if (!curr) break;
-                            const text = curr.innerText.trim().split('\n')[0].trim();
-                            if (text.length > 2 && text.length < 50 && !nameBlacklist.some(bl => text.includes(bl))) {
-                                return text;
-                            }
-                            curr = curr.parentElement;
-                        }
-                    }
-
-                    // Fallback: Active item trong sidebar
-                    const activeItem = document.querySelector('[aria-selected="true"]');
-                    if (activeItem) {
-                        const t = activeItem.innerText.trim().split('\n')[0].trim();
-                        if (t.length > 2 && t.length < 50 && !nameBlacklist.some(bl => t.includes(bl))) return t;
-                    }
-
-                    return "";
-                }) || "";
-            } catch (e) { }
+            console.log(`[Scraper] ❌ Could not find View Profile link: ${e.message}`);
         }
 
         const userData = {
-            name: extractedName || "Khách hàng",
+            name: targetName || "Khách hàng",
             profileLink: profileLink
         };
 
@@ -231,7 +164,7 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName) {
             console.log(`[Scraper] DONE: ${userData.name} - ${userData.profileLink}`);
 
             // ===== DUY TRÌ PHIÊN AN TOÀN (Safe Session Persistence) =====
-            // Tự động làm mới cookies với tần suất thấp (tối thiểu 1 tiếng/lần)
+            // Tự động làm mới cookies với tần suất thấp để tránh bị FB quét
             try {
                 const stats = fs.statSync(cookiesPath);
                 const lastModified = stats.mtimeMs;
@@ -246,21 +179,16 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName) {
             } catch (ce) {
                 console.log(`[Scraper] Skip periodic cookie update: ${ce.message}`);
             }
-
-            return userData;
         }
 
-        console.log(`[Scraper] FAILED: Could not find data even after reload.`);
-        return null;
+        await browser.close();
+        return userData;
 
     } catch (error) {
         console.error('[Scraper] Error:', error.message);
+        if (browser) await browser.close();
         return null;
-    } finally {
-        await browser.close();
     }
 }
 
-module.exports = {
-    scrapeUserProfile
-};
+module.exports = { scrapeUserProfile };
