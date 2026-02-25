@@ -2,13 +2,14 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 
-async function scrapeUserProfile(psid, pageId) {
-    const cookiesPath = process.env.FB_COOKIES_PATH || path.resolve(__dirname, '../cookies.json');
+async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName) {
+    const cookiesPath = specificCookiePath || process.env.FB_COOKIES_PATH || path.resolve(__dirname, '../cookies.json');
     // Mặc định chạy ẩn (headless) trên server, có thể chỉnh qua biến môi trường
     const isHeadless = process.env.HEADLESS !== 'false';
 
     const browser = await chromium.launch({
         headless: isHeadless,
+        slowMo: isHeadless ? 0 : 1000, // Chạy chậm lại 1s mỗi thao tác nếu đang debug để dễ xem
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -117,48 +118,69 @@ async function scrapeUserProfile(psid, pageId) {
             return null;
         }
 
-        console.log(`[Scraper] ✅ UI dường như đã sẵn sàng. Bắt đầu tìm kiếm thông tin...`);
+        console.log(`[Scraper] ✅ UI seems ready. Starting name verification...`);
 
-        // Đợi "Xem trang cá nhân" xuất hiện (link profile)
+        // ===== DỌN DẸP POP-UP (Để không che Link) =====
+        try {
+            const btns = page.locator('button:has-text("Xong"), button:has-text("OK"), button:has-text("Đã hiểu"), div[aria-label="Đóng"]');
+            const count = await btns.count();
+            for (let i = 0; i < count; i++) {
+                if (await btns.nth(i).isVisible()) await btns.nth(i).click();
+            }
+        } catch (e) { }
+
+        // ===== XÁC MINH & ĐỒNG BỘ (Sync UI with URL) =====
+        if (targetName && targetName !== "Khách hàng") {
+            try {
+                console.log(`[Scraper] 🔍 Checking UI sync for: "${targetName}"...`);
+
+                const check = async () => {
+                    return await page.evaluate((expected) => {
+                        const clean = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "").trim();
+                        return clean(document.body.innerText).includes(clean(expected));
+                    }, targetName);
+                };
+
+                let isOk = await check();
+                if (!isOk) {
+                    console.log(`[Scraper] ⚠️ UI lag detected. Forcing F5 to sync with URL ID...`);
+                    await page.reload({ waitUntil: 'domcontentloaded' });
+                    await page.waitForTimeout(10000); // Đợi Meta load lại đúng người
+                }
+            } catch (e) {
+                console.log(`[Scraper] Sync check skipped: ${e.message}`);
+            }
+        }
+
+        // ===== TRÍCH XUẤT TÊN & LINK (Final Extraction) =====
         let profileLink = "";
-        let extractedName = "";
+        let extractedName = targetName || "";
 
         try {
-            console.log(`[Scraper] Waiting for 'Xem trang cá nhân' to appear...`);
+            console.log(`[Scraper] Extracting profile link...`);
             const profileLocator = page.locator('a:has-text("Xem trang cá nhân"), a:has-text("View profile")').first();
-            await profileLocator.waitFor({ state: 'visible', timeout: 30000 });
-
-            // Lấy href trực tiếp từ Playwright API
+            await profileLocator.waitFor({ state: 'visible', timeout: 15000 });
             profileLink = await profileLocator.getAttribute('href') || "";
-            console.log(`[Scraper] Profile link found: ${profileLink}`);
 
-            // Đảm bảo link tuyệt đối
             if (profileLink && !profileLink.startsWith('http')) {
                 profileLink = 'https://www.facebook.com' + profileLink;
             }
         } catch (e) {
-            console.log(`[Scraper] 'Xem trang cá nhân' NOT found after 30s. Trying fallback...`);
-
-            // Fallback: Tìm bất kỳ link profile hợp lệ nào
-            try {
-                const fallbackLink = page.locator('a[href*="facebook.com/"]:not([href*="business.facebook.com"]):not([href*="/help/"]):not([href*="/videos/"]):not([href*="comment_id"]):not([href*="/selfxss"])').first();
-                await fallbackLink.waitFor({ state: 'visible', timeout: 10000 });
-                profileLink = await fallbackLink.getAttribute('href') || "";
-            } catch (e2) {
-                console.log(`[Scraper] No profile link found at all.`);
-                await page.screenshot({ path: `debug_failed_${psid}.png` });
-            }
+            console.log(`[Scraper] Link not found. Trying one last fallback...`);
+            const fallbackLink = page.locator('a[href*="facebook.com/"]:not([href*="business.facebook.com"]):not([href*="/help/"])').first();
+            profileLink = await fallbackLink.getAttribute('href').catch(() => "") || "";
         }
 
-        // Tìm Tên khách hàng
-        try {
-            // Cách 1: Tìm tên trong header cuộc trò chuyện (giữa trang)
-            const chatHeader = page.locator('div[role="main"] header span, div[role="main"] h2').first();
-            const headerText = await chatHeader.innerText({ timeout: 5000 });
-            if (headerText && headerText.length > 1 && headerText.length < 50) {
-                extractedName = headerText.trim().split('\n')[0];
-            }
-        } catch (e) { }
+        // Nếu chưa có tên, cố gắng lấy từ UI
+        if (!extractedName || extractedName === "Khách hàng") {
+            try {
+                const chatHeader = page.locator('div[role="main"] header span, div[role="main"] h2').first();
+                const headerText = await chatHeader.innerText({ timeout: 5000 }).catch(() => "");
+                if (headerText) {
+                    extractedName = headerText.replace(/color:red;.*|Nếu ai đó bảo bạn.*|-webkit-text-stroke.*/gi, '').split('\n')[0].trim();
+                }
+            } catch (e) { }
+        }
 
         // Cách 2: Tìm tên bên cạnh "Xem trang cá nhân" 
         if (!extractedName) {
@@ -207,6 +229,24 @@ async function scrapeUserProfile(psid, pageId) {
 
         if (userData.profileLink) {
             console.log(`[Scraper] DONE: ${userData.name} - ${userData.profileLink}`);
+
+            // ===== DUY TRÌ PHIÊN AN TOÀN (Safe Session Persistence) =====
+            // Tự động làm mới cookies với tần suất thấp (tối thiểu 1 tiếng/lần)
+            try {
+                const stats = fs.statSync(cookiesPath);
+                const lastModified = stats.mtimeMs;
+                const now = Date.now();
+                const oneHour = 60 * 60 * 1000;
+
+                if (now - lastModified > oneHour) {
+                    const latestCookies = await context.cookies();
+                    fs.writeFileSync(cookiesPath, JSON.stringify({ cookies: latestCookies }, null, 4), 'utf8');
+                    console.log(`[Scraper] 🔄 Safe Session Refresh: Cookies updated for ${path.basename(cookiesPath)}`);
+                }
+            } catch (ce) {
+                console.log(`[Scraper] Skip periodic cookie update: ${ce.message}`);
+            }
+
             return userData;
         }
 

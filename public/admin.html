@@ -1,366 +1,795 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FB Scraper Admin Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <title>⚡ FB Scraper Premium Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary: #4f46e5;
-            --primary-hover: #4338ca;
-            --bg: #0f172a;
-            --card-bg: #1e293b;
-            --text: #f1f5f9;
-            --text-muted: #94a3b8;
-            --border: #334155;
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.4);
+            --bg: #030712;
+            --card-bg: rgba(31, 41, 55, 0.7);
+            --text: #f9fafb;
+            --text-dim: #9ca3af;
+            --border: rgba(75, 85, 99, 0.3);
             --success: #10b981;
             --error: #ef4444;
-            --warning: #f59e0b;
+            --sidebar-w: 260px;
         }
 
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            font-family: 'Inter', sans-serif;
+            font-family: 'Outfit', sans-serif;
         }
 
         body {
-            background: var(--bg);
+            background-color: var(--bg);
+            background-image:
+                radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(16, 185, 129, 0.05) 0%, transparent 40%);
             color: var(--text);
             min-height: 100vh;
             display: flex;
+            overflow: hidden;
         }
 
-        /* Sidebar */
+        /* Sidebar Glassmorphism */
         .sidebar {
-            width: 260px;
-            background: var(--card-bg);
+            width: var(--sidebar-w);
+            background: rgba(17, 24, 39, 0.8);
+            backdrop-filter: blur(12px);
             border-right: 1px solid var(--border);
-            padding: 2rem 1rem;
+            padding: 2.5rem 1.5rem;
             display: flex;
             flex-direction: column;
-            gap: 1.5rem;
+            z-index: 100;
         }
 
         .logo {
             font-size: 1.5rem;
             font-weight: 700;
-            color: var(--primary);
-            margin-bottom: 2rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .nav-item {
-            padding: 0.75rem 1rem;
-            border-radius: 0.5rem;
-            cursor: pointer;
-            color: var(--text-muted);
-            transition: all 0.2s;
+            background: linear-gradient(to right, #6366f1, #a855f7);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 3rem;
             display: flex;
             align-items: center;
             gap: 0.75rem;
-            text-decoration: none;
         }
 
-        .nav-item:hover, .nav-item.active {
-            background: rgba(79, 70, 229, 0.1);
+        .nav-item {
+            padding: 1rem 1.25rem;
+            border-radius: 0.75rem;
+            cursor: pointer;
+            color: var(--text-dim);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+            text-decoration: none;
+            border: 1px solid transparent;
+        }
+
+        .nav-item:hover {
+            background: rgba(255, 255, 255, 0.03);
             color: var(--text);
+            transform: translateX(5px);
         }
 
         .nav-item.active {
-            background: var(--primary);
-            color: white;
+            background: rgba(99, 102, 241, 0.1);
+            border-color: rgba(99, 102, 241, 0.3);
+            color: var(--primary);
+            box-shadow: 0 0 20px var(--primary-glow);
         }
 
-        /* Main Content */
+        /* Main Content Area */
         .main {
             flex: 1;
-            padding: 2rem 3rem;
+            padding: 2.5rem 4rem;
             overflow-y: auto;
+            position: relative;
         }
 
         header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 2rem;
+            margin-bottom: 3rem;
         }
 
-        h1 { font-size: 1.875rem; font-weight: 600; }
+        .header-left h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: -0.025em;
+        }
+
+        .header-left p {
+            color: var(--text-dim);
+            font-size: 0.95rem;
+            margin-top: 0.25rem;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--border);
+            border-radius: 1.25rem;
+            padding: 1.5rem;
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary);
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--text-dim);
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        /* Content Sections */
+        .section {
+            display: none;
+        }
+
+        .section.active {
+            display: block;
+            animation: slideUp 0.4s ease forwards;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
 
         .card {
             background: var(--card-bg);
+            backdrop-filter: blur(8px);
             border: 1px solid var(--border);
-            border-radius: 1rem;
-            padding: 1.5rem;
+            border-radius: 1.5rem;
+            padding: 2rem;
             margin-bottom: 2rem;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
 
         .card-header {
-            margin-bottom: 1.5rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            margin-bottom: 2rem;
         }
 
-        .card-title { font-size: 1.125rem; font-weight: 600; }
-
-        /* Forms */
-        .form-group { margin-bottom: 1.5rem; }
-        label { display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--text-muted); }
-        
-        textarea, input {
-            width: 100%;
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 0.5rem;
-            padding: 0.75rem 1rem;
-            color: var(--text);
-            font-size: 0.875rem;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-
-        textarea:focus, input:focus { border-color: var(--primary); }
-        textarea { min-height: 200px; font-family: 'Courier New', Courier, monospace; }
-
-        .btn {
-            padding: 0.75rem 1.5rem;
-            border-radius: 0.5rem;
+        .card-title {
+            font-size: 1.25rem;
             font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            border: none;
-            font-size: 0.875rem;
-            display: inline-flex;
+            display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.75rem;
         }
 
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-primary:hover { background: var(--primary-hover); }
-        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        .btn-danger { background: rgba(239, 68, 68, 0.1); color: var(--error); border: 1px solid var(--error); }
-        .btn-danger:hover { background: var(--error); color: white; }
-
-        /* Toast notifications */
-        #toast {
-            position: fixed;
-            bottom: 2rem;
-            right: 2rem;
-            padding: 1rem 2rem;
-            border-radius: 0.5rem;
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            color: var(--text);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-            transform: translateY(150%);
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            z-index: 1000;
-        }
-        #toast.show { transform: translateY(0); }
-
-        /* Sections */
-        .section { display: none; }
-        .section.active { display: block; animation: fadeIn 0.3s ease; }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+        /* Tables and Lists */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
         }
 
-        /* Status indicators */
-        .status-pill {
-            padding: 0.25rem 0.75rem;
-            border-radius: 9999px;
+        .data-table th {
+            text-align: left;
+            padding: 1rem;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            font-weight: 500;
+            border-bottom: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .data-table td {
+            padding: 1.25rem 1rem;
+            font-size: 0.9rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .tr-hover:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        /* Badges */
+        .badge {
+            padding: 0.35rem 0.75rem;
+            border-radius: 2rem;
             font-size: 0.75rem;
             font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
-        .status-online { background: rgba(16, 185, 129, 0.1); color: var(--success); }
+
+        .badge-success {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+        }
+
+        .badge-error {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--error);
+        }
+
+        .badge-indigo {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--primary);
+        }
+
+        /* Editors */
+        textarea {
+            width: 100%;
+            background: #000;
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            color: #10b981;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9rem;
+            min-height: 400px;
+            outline: none;
+            resize: vertical;
+        }
+
+        textarea:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 15px var(--primary-glow);
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.875rem 1.5rem;
+            border-radius: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 1px solid transparent;
+            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            white-space: nowrap;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 4px 15px var(--primary-glow);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px var(--primary-glow);
+        }
+
+        .btn-ghost {
+            background: transparent;
+            border-color: var(--border);
+            color: var(--text-dim);
+        }
+
+        .btn-ghost:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text);
+        }
+
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--error);
+            border-color: rgba(239, 68, 68, 0.2);
+        }
+
+        .btn-danger:hover {
+            background: var(--error);
+            color: white;
+        }
+
+        .btn-sm {
+            padding: 0.4rem 0.75rem;
+            font-size: 0.75rem;
+            border-radius: 0.5rem;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: #1f2937;
+            border: 1px solid var(--border);
+            border-radius: 1.5rem;
+            width: 500px;
+            padding: 2rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal h2 {
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+        }
+
+        .input-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+        }
+
+        .input-group input,
+        .input-group textarea {
+            width: 100%;
+            background: #0f172a;
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 0.75rem 1rem;
+            color: white;
+            outline: none;
+        }
+
+        .input-group textarea {
+            min-height: 150px;
+            font-family: monospace;
+            font-size: 0.8rem;
+        }
+
+        /* Toast */
+        #toast {
+            position: fixed;
+            top: 2rem;
+            right: 2.5rem;
+            padding: 1.25rem 2.5rem;
+            border-radius: 1.25rem;
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            color: var(--text);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+            transform: translateX(150%);
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 1001;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        #toast.show {
+            transform: translateX(0);
+        }
     </style>
 </head>
+
 <body>
     <div class="sidebar">
         <div class="logo">
-            <span>⚡</span> FB Scraper
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+            </svg>
+            <span>Scraper Pro</span>
         </div>
-        <a href="#" class="nav-item active" onclick="showSection('cookies')">🍪 Quản lý Cookies</a>
-        <a href="#" class="nav-item" onclick="showSection('config')">⚙️ Cấu hình (Config)</a>
-        <a href="#" class="nav-item" onclick="showSection('secrets')">🔑 Service Account</a>
-        <a href="#" class="nav-item" onclick="showSection('status')">📊 Trạng thái hệ thống</a>
-        
-        <div style="margin-top: auto;">
-            <button class="btn btn-danger" style="width: 100%;" onclick="restartBot()">🔄 Khởi động lại Bot</button>
+
+        <div class="nav-item active" onclick="showSection('dashboard')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="7" height="7" />
+                <rect x="14" y="3" width="7" height="7" />
+                <rect x="14" y="14" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" />
+            </svg>
+            Dashboard
+        </div>
+
+        <div class="nav-item" onclick="showSection('accounts')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            Tài khoản Scraper
+        </div>
+
+        <div class="nav-item" onclick="showSection('config')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1-2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+            Cấu hình (Config)
+        </div>
+
+        <div style="margin-top: auto; padding-top: 2rem;">
+            <button class="btn btn-danger" style="width: 100%; justify-content: center;" onclick="restartBot()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M23 4v6h-6" />
+                    <path d="M1 20v-6h6" />
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                </svg>
+                Restart Service
+            </button>
         </div>
     </div>
 
     <div class="main">
         <header>
-            <h1 id="section-title">Quản lý Cookies</h1>
-            <div id="app-status">
-                <span class="status-pill status-online">● Hệ thống đang chạy</span>
+            <div class="header-left">
+                <h1 id="view-title">Dashboard</h1>
+                <p id="view-subtitle">Tổng quan hệ thống trích xuất thông tin</p>
+            </div>
+            <div id="connection-status">
+                <span class="badge badge-success">● Engine: Online</span>
             </div>
         </header>
 
-        <!-- Cookies Section -->
-        <div id="cookies" class="section active">
+        <!-- DASHBOARD VIEW -->
+        <div id="dashboard" class="section active">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Đang chờ xử lý</div>
+                    <div class="stat-value" id="stat-queue">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Workers hoạt động</div>
+                    <div class="stat-value" id="stat-workers">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Tài khoản con</div>
+                    <div class="stat-value" id="stat-accounts">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Số Page quản lý</div>
+                    <div class="stat-value" id="stat-pages">0</div>
+                </div>
+            </div>
+
             <div class="card">
                 <div class="card-header">
-                    <span class="card-title">Cập nhật Cookies mới</span>
-                    <span style="font-size: 0.8rem; color: var(--text-muted)">Paste định dạng JSON từ J2Team hoặc EditThisCookie</span>
+                    <span class="card-title">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 20v-6M6 20V10M18 20V4" />
+                        </svg>
+                        Lịch sử xử lý gần đây
+                    </span>
+                    <button class="btn btn-ghost" onclick="updateStatus()"><svg width="16" height="16"
+                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M23 4v6h-6" />
+                            <path d="M20.49 15a9 9 0 0 1-14.85-3.36L1 10" />
+                        </svg> Làm mới</button>
                 </div>
-                <div class="form-group">
-                    <textarea id="cookies-data" placeholder="Paste JSON cookies vào đây..."></textarea>
-                </div>
-                <button class="btn btn-primary" id="save-cookies" onclick="saveFile('cookies')">💾 Lưu Cookies</button>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>THỜI GIAN</th>
+                            <th>TÊN KHÁCH HÀNG</th>
+                            <th>BỘ QUYÉT</th>
+                            <th>THÔNG TIN LẤY ĐƯỢC</th>
+                            <th>TRẠNG THÁI</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-list">
+                        <tr>
+                            <td colspan="5" style="text-align:center; color:var(--text-dim); padding: 3rem;">Đang tải dữ
+                                liệu...</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
-        <!-- Config Section -->
+        <!-- ACCOUNTS VIEW -->
+        <div id="accounts" class="section">
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Danh sách tài khoản phụ (Puppet Accounts)</span>
+                    <button class="btn btn-primary" onclick="openAddAccountModal()">+ Thêm Tài Khoản Mới</button>
+                </div>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>TÊN TÀI KHOẢN</th>
+                            <th>FILE COOKIES</th>
+                            <th style="padding-left: 1rem">THAO TÁC</th>
+                        </tr>
+                    </thead>
+                    <tbody id="accounts-list">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- CONFIG VIEW -->
         <div id="config" class="section">
             <div class="card">
                 <div class="card-header">
-                    <span class="card-title">Cấu hình file config.json</span>
+                    <span class="card-title">Trình biên tập Config.json</span>
                 </div>
-                <div class="form-group">
-                    <textarea id="config-data" placeholder="Nội dung config.json..."></textarea>
-                </div>
-                <button class="btn btn-primary" id="save-config" onclick="saveFile('config')">💾 Lưu Cấu hình</button>
-            </div>
-        </div>
-
-        <!-- Secrets Section -->
-        <div id="secrets" class="section">
-            <div class="card">
-                <div class="card-header">
-                    <span class="card-title">Google Service Account</span>
-                </div>
-                <div class="form-group">
-                    <textarea id="secrets-data" placeholder="Nội dung service_account.json..."></textarea>
-                </div>
-                <button class="btn btn-primary" id="save-secrets" onclick="saveFile('secrets')">💾 Lưu Service Account</button>
-            </div>
-        </div>
-
-        <!-- Status Section -->
-        <div id="status" class="section">
-            <div class="card">
-                <div class="card-header">
-                    <span class="card-title">Thông tin hệ thống</span>
-                </div>
-                <div id="system-info">
-                    <p style="margin-bottom: 0.5rem;">Cổng đang chạy: <strong id="info-port">-</strong></p>
-                    <p style="margin-bottom: 0.5rem;">Đường dẫn Cookies: <strong id="info-cookies">-</strong></p>
-                    <p>Môi trường: <strong>Ubuntu VPS (Linux)</strong></p>
+                <textarea id="config-editor" spellcheck="false"></textarea>
+                <div style="margin-top: 1.5rem; display: flex; gap: 1rem;">
+                    <button class="btn btn-primary" id="save-config-btn" onclick="saveConfig()">💾 Lưu Cấu Hình</button>
+                    <button class="btn btn-ghost" onclick="fetchConfig()">🔄 Hoàn tác</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <div id="toast">Thông báo ở đây</div>
+    <div id="toast">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+            <polyline points="22 4 12 14.01 9 11.01" />
+        </svg>
+        <span id="toast-msg">Thông báo</span>
+    </div>
+
+    <!-- Add/Refresh Account Modal -->
+    <div id="account-modal" class="modal-overlay" onclick="if(event.target === this) closeAccountModal()">
+        <div class="modal">
+            <h2 id="modal-title">Thêm Tài Khoản Scraper</h2>
+            <div class="input-group" id="modal-name-group">
+                <label>Tên hiển thị (Nickname)</label>
+                <input type="text" id="acc-nickname" placeholder="Ví dụ: Nguyễn Văn A">
+            </div>
+            <div class="input-group">
+                <label id="modal-cookies-label">Dán JSON Cookies</label>
+                <textarea id="acc-cookies" placeholder="Paste JSON vào đây..."></textarea>
+            </div>
+            <div style="display:flex; gap: 1rem; margin-top: 2rem;">
+                <button class="btn btn-primary" style="flex:1; justify-content:center" id="acc-submit-btn"
+                    onclick="submitAccountAction()">Xác nhận</button>
+                <button class="btn btn-ghost" onclick="closeAccountModal()">Hủy</button>
+            </div>
+        </div>
+    </div>
 
     <script>
-        const API_URL = '/api/admin';
+        const API = '/api/admin';
+        let currentSection = 'dashboard';
+        let currentEditingFile = null;
 
-        async function fetchFile(type) {
+        async function updateStatus() {
             try {
-                const res = await fetch(`${API_URL}/read?file=${type}`);
+                const res = await fetch(`${API}/status`);
                 const data = await res.json();
-                if (data.content) {
-                    document.getElementById(`${type}-data`).value = data.content;
+
+                document.getElementById('stat-queue').innerText = data.queueSize || 0;
+                document.getElementById('stat-workers').innerText = data.activeWorkers || 0;
+                document.getElementById('stat-accounts').innerText = (data.accounts || []).length;
+                document.getElementById('stat-pages').innerText = (data.pages || []).length;
+
+                const historyBody = document.getElementById('history-list');
+                if (data.history && data.history.length > 0) {
+                    historyBody.innerHTML = data.history.map(item => `
+                        <tr class="tr-hover">
+                            <td><span style="color:var(--text-dim)">${item.time}</span></td>
+                            <td><div style="font-weight:600">${item.name}</div><div style="font-size:0.75rem; color:var(--text-dim)">PSID: ${item.psid}</div></td>
+                            <td><span class="badge badge-indigo">${item.page}</span></td>
+                            <td>${item.profileLink ? `<a href="${item.profileLink}" target="_blank" style="color:var(--primary);text-decoration:none;font-weight:500">Xem Profile ↗</a>` : '<span style="color:var(--error)">N/A</span>'}</td>
+                            <td><span class="badge ${item.status === 'success' ? 'badge-success' : 'badge-error'}">${item.status}</span></td>
+                        </tr>
+                    `).join('');
+                } else {
+                    historyBody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-dim); padding: 3rem;">Chưa có dữ liệu xử lý nào.</td></tr>`;
+                }
+
+                const accountsBody = document.getElementById('accounts-list');
+                if (data.accounts) {
+                    accountsBody.innerHTML = data.accounts.map((acc, i) => `
+                        <tr class="tr-hover">
+                            <td>${i + 1}</td>
+                            <td><strong>${acc.name}</strong></td>
+                            <td><code style="background:rgba(0,0,0,0.3);padding:0.2rem 0.5rem;border-radius:4px">${acc.cookie_file}</code></td>
+                            <td>
+                                <div style="display:flex; gap: 0.5rem">
+                                    <button class="btn btn-ghost btn-sm" onclick="openRefreshModal('${acc.cookie_file}', '${acc.name}')" title="Làm mới Cookies">🔄 Cập nhật</button>
+                                    <button class="btn btn-danger btn-sm" onclick="deleteAccount('${acc.cookie_file}', '${acc.name}')" title="Xóa tài khoản">🗑️</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `).join('');
                 }
             } catch (e) {
-                showToast('Lỗi khi tải dữ liệu: ' + e.message, true);
+                console.error(e);
             }
         }
 
-        async function saveFile(type) {
-            const content = document.getElementById(`${type}-data`).value;
-            const btn = document.getElementById(`save-${type}`);
-            
+        async function fetchConfig() {
             try {
-                // Validate JSON
-                JSON.parse(content);
+                const res = await fetch(`${API}/read?file=config`);
+                const data = await res.json();
+                document.getElementById('config-editor').value = data.content;
             } catch (e) {
-                showToast('Định dạng JSON không hợp lệ!', true);
+                showToast('Lỗi khi tải config', true);
+            }
+        }
+
+        async function saveConfig() {
+            const content = document.getElementById('config-editor').value;
+            const btn = document.getElementById('save-config-btn');
+            try { JSON.parse(content); } catch (e) { showToast('JSON không hợp lệ!', true); return; }
+            btn.disabled = true; btn.innerHTML = '⌛ Đang lưu...';
+            try {
+                const res = await fetch(`${API}/write`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file: 'config', content })
+                });
+                if (res.ok) showToast('Đã lưu cấu hình thành công!');
+                else showToast('Lỗi khi lưu cấu hình!', true);
+            } catch (e) { showToast('Lỗi: ' + e.message, true); }
+            finally { btn.disabled = false; btn.innerHTML = '💾 Lưu Cấu Hình'; }
+        }
+
+        async function restartBot() {
+            if (!confirm('Xác nhận khởi động lại hệ thống?')) return;
+            try {
+                await fetch(`${API}/restart`, { method: 'POST' });
+                showToast('Hệ thống đang khởi động lại...');
+                setTimeout(() => window.location.reload(), 3000);
+            } catch (e) { showToast('Thực hiện thất bại', true); }
+        }
+
+        // --- ACCOUNT ACTIONS ---
+
+        function openAddAccountModal() {
+            currentEditingFile = null;
+            document.getElementById('modal-title').innerText = 'Thêm Tài Khoản Mới';
+            document.getElementById('modal-name-group').style.display = 'block';
+            document.getElementById('modal-cookies-label').innerText = 'Dán JSON Cookies mới';
+            document.getElementById('account-modal').classList.add('active');
+        }
+
+        function openRefreshModal(file, name) {
+            currentEditingFile = file;
+            document.getElementById('modal-title').innerText = 'Làm mới Cookies: ' + name;
+            document.getElementById('modal-name-group').style.display = 'none';
+            document.getElementById('modal-cookies-label').innerText = 'Dán nội dung Cookies mới (File: ' + file + ')';
+            document.getElementById('account-modal').classList.add('active');
+        }
+
+        function closeAccountModal() {
+            document.getElementById('account-modal').classList.remove('active');
+            document.getElementById('acc-nickname').value = '';
+            document.getElementById('acc-cookies').value = '';
+        }
+
+        async function submitAccountAction() {
+            const name = document.getElementById('acc-nickname').value;
+            const cookieContent = document.getElementById('acc-cookies').value;
+            const btn = document.getElementById('acc-submit-btn');
+
+            if (!cookieContent || (!currentEditingFile && !name)) {
+                showToast('Vui lòng nhập đầy đủ!', true);
                 return;
             }
 
-            btn.disabled = true;
-            btn.innerText = '⌛ Đang lưu...';
+            btn.disabled = true; btn.innerText = '⌛ Đang xử lý...';
 
             try {
-                const res = await fetch(`${API_URL}/write`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ file: type, content })
+                const endpoint = currentEditingFile ? `${API}/accounts/refresh` : `${API}/accounts/add`;
+                const payload = currentEditingFile
+                    ? { cookie_file: currentEditingFile, cookieContent }
+                    : { name, cookieContent };
+
+                const res = await fetch(endpoint, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
                 });
-                
+
                 if (res.ok) {
-                    showToast('Đã lưu thành công!');
+                    showToast('Thao tác thành công!');
+                    closeAccountModal();
+                    updateStatus();
                 } else {
-                    showToast('Lỗi khi lưu file!', true);
+                    const err = await res.json();
+                    showToast('Lỗi: ' + err.error, true);
                 }
             } catch (e) {
                 showToast('Lỗi: ' + e.message, true);
             } finally {
-                btn.disabled = false;
-                btn.innerText = '💾 Lưu ' + (type === 'cookies' ? 'Cookies' : type === 'config' ? 'Cấu hình' : 'Service Account');
+                btn.disabled = false; btn.innerText = 'Xác nhận';
             }
         }
 
-        async function restartBot() {
-            if (!confirm('Bạn có chắc muốn khởi động lại bot? Kết nối sẽ bị ngắt một lát.')) return;
-            
+        async function deleteAccount(file, name) {
+            if (!confirm('Bạn có chắc muốn XÓA tài khoản "' + name + '"? Thao tác này sẽ xóa cả file cookies vật lý.')) return;
+
             try {
-                showToast('Đang gửi lệnh restart...');
-                await fetch(`${API_URL}/restart`, { method: 'POST' });
-                showToast('Gửi lệnh thành công. Bot đang khởi động lại...');
-                setTimeout(() => window.location.reload(), 3000);
+                const res = await fetch(`${API}/accounts/delete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cookie_file: file })
+                });
+
+                if (res.ok) {
+                    showToast('Đã xóa tài khoản thành công!');
+                    updateStatus();
+                } else {
+                    showToast('Lỗi khi xóa tài khoản', true);
+                }
             } catch (e) {
-                showToast('Lỗi: ' + e.message, true);
+                showToast('Lỗi hệ thống: ' + e.message, true);
             }
         }
 
         function showSection(id) {
+            currentSection = id;
             document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            
             document.getElementById(id).classList.add('active');
-            event.currentTarget.classList.add('active');
-            
-            const titles = {
-                'cookies': 'Quản lý Cookies',
-                'config': 'Cấu hình hệ thống',
-                'secrets': 'Service Account Credentials',
-                'status': 'Trạng thái hệ thống'
-            };
-            document.getElementById('section-title').innerText = titles[id];
-            
-            if (id !== 'status') fetchFile(id);
-            else updateStatusInfo();
+            const navItems = document.querySelectorAll('.nav-item');
+            if (id === 'dashboard') navItems[0].classList.add('active');
+            if (id === 'accounts') navItems[1].classList.add('active');
+            if (id === 'config') navItems[2].classList.add('active');
+            if (id === 'dashboard' || id === 'accounts') updateStatus();
+            if (id === 'config') fetchConfig();
         }
 
         function showToast(msg, isError = false) {
             const t = document.getElementById('toast');
-            t.innerText = msg;
-            t.style.borderColor = isError ? 'var(--error)' : 'var(--success)';
+            document.getElementById('toast-msg').innerText = msg;
+            t.style.borderLeft = isError ? '4px solid var(--error)' : '4px solid var(--success)';
             t.classList.add('show');
             setTimeout(() => t.classList.remove('show'), 3000);
         }
 
-        function updateStatusInfo() {
-            // Sẽ được fetch từ server sau
-        }
-
-        // Tải cookies lúc mới vào
-        fetchFile('cookies');
+        setInterval(() => { if (currentSection === 'dashboard' || currentSection === 'accounts') updateStatus(); }, 10000);
+        updateStatus();
     </script>
 </body>
+
 </html>
