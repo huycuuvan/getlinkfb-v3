@@ -19,27 +19,31 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName) {
         ]
     });
 
-    // ===== GIẢ LẬP THIẾT BỊ (Anti-Fingerprinting) =====
+    // ===== GIẢ LẬP THIẾT BỊ CỐ ĐỊNH (Persistent Fingerprinting) =====
+    // Chọn User-Agent cố định dựa trên tên file cookie để FB không nghi ngờ đổi thiết bị
     const userAgents = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     ];
-    const randomUA = userAgents[Math.floor(Math.random() * userAgents.length)];
+    // Dùng mã băm đơn giản từ path để chọn UA cố định cho mỗi file
+    const pathHash = cookiesPath.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a }, 0);
+    const selectedUA = userAgents[Math.abs(pathHash) % userAgents.length];
+
     const viewports = [
         { width: 1920, height: 1080 },
-        { width: 1366, height: 768 },
         { width: 1536, height: 864 }
     ];
-    const randomVP = viewports[Math.floor(Math.random() * viewports.length)];
+    const selectedVP = viewports[Math.abs(pathHash) % viewports.length];
 
     const context = await browser.newContext({
-        userAgent: randomUA,
-        viewport: randomVP,
+        userAgent: selectedUA,
+        viewport: selectedVP,
         locale: 'vi-VN',
         timezoneId: 'Asia/Ho_Chi_Minh'
     });
+
+    console.log(`[Browser] Using Persistent UA for ${path.basename(cookiesPath)}: ${selectedUA.substring(0, 50)}...`);
 
     // Tắt timeout mặc định để chạy ổn định hơn
     context.setDefaultTimeout(60000);
@@ -101,7 +105,7 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName) {
         let currentUrl = page.url();
         if (currentUrl.includes('login') || currentUrl.includes('checkpoint')) {
             console.log(`[Scraper] ❌ COOKIES HẾT HẠN! Redirect to: ${currentUrl}`);
-            return null;
+            return null; // Sẽ nhảy vào finally để đóng browser
         }
 
         // ===== KIỂM TRA UI & RELOAD (Phòng chống trang trắng/lag) =====
@@ -121,7 +125,7 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName) {
         currentUrl = page.url();
         if (currentUrl.includes('login') || currentUrl.includes('checkpoint')) {
             console.log(`[Scraper] ❌ COOKIES HẾT HẠN (Phát hiện sau Reload)`);
-            return null;
+            return null; // Sẽ nhảy vào finally để đóng browser
         }
 
         console.log(`[Scraper] ✅ UI ready. Performing direct extraction...`);
@@ -141,15 +145,36 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName) {
             }
         } catch (e) { }
 
-        // 2. TÌM VÀ CLICK "XEM TRANG CÁ NHÂN"
+        // 2. ÉP TRANG PHẢI HIỆN NÚT (Nếu URL lag thì click Sidebar)
         let profileLink = "";
+        const btnSelector = 'a:has-text("Xem trang cá nhân"), a:has-text("View profile")';
+
         try {
-            const btnLink = page.locator('a:has-text("Xem trang cá nhân"), a:has-text("View profile")').first();
+            // Kiểm tra nhanh xem nút có sẵn chưa
+            const btnLink = page.locator(btnSelector).first();
+            const isVisible = await btnLink.isVisible({ timeout: 5000 }).catch(() => false);
 
-            // Đợi nút xuất hiện (Max 12s)
-            await btnLink.waitFor({ state: 'visible', timeout: 12000 });
+            if (!isVisible) {
+                console.log(`[Scraper] ⚠️ Profile button not visible. Attempting Sidebar Click to force UI update...`);
+                // Cách 1: Click vào item có PSID tương ứng trong Sidebar (nếu tìm được)
+                const sidebarItem = page.locator(`div[role="grid"] [role="row"]:has-text("${targetName}")`).first();
+                if (await sidebarItem.count() > 0) {
+                    await sidebarItem.click({ force: true });
+                    await page.waitForTimeout(3000);
+                }
 
-            // Khoanh đỏ rực rỡ
+                // Cách 2: Nếu Khung phải bị đóng, tìm nút "i" (Chi tiết) để mở ra
+                const detailToggle = page.locator('div[aria-label="Thông tin chi tiết"], div[aria-label="Conversation details"]').first();
+                if (await detailToggle.isVisible()) {
+                    await detailToggle.click();
+                    await page.waitForTimeout(2000);
+                }
+            }
+
+            // ĐỢI VÀ CLICK LẤY LINK
+            await btnLink.waitFor({ state: 'visible', timeout: 15000 });
+
+            // Highlight rực rỡ
             await btnLink.evaluate(el => {
                 el.style.outline = '10px solid red';
                 el.style.boxShadow = '0 0 50px red';
@@ -158,13 +183,12 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName) {
             });
             await page.waitForTimeout(1000);
 
-            // Lấy link - Dùng force: true để click bất chấp bị che khuất
             profileLink = await btnLink.getAttribute('href');
             await btnLink.click({ force: true }).catch(() => { });
             console.log(`[Scraper] 🎯 Captured: ${profileLink}`);
 
         } catch (e) {
-            console.log(`[Scraper] ❌ Could not find View Profile link: ${e.message}`);
+            console.log(`[Scraper] ❌ Final attempt failed: ${e.message}`);
         }
 
         const userData = {
@@ -176,7 +200,6 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName) {
             console.log(`[Scraper] DONE: ${userData.name} - ${userData.profileLink}`);
 
             // ===== DUY TRÌ PHIÊN AN TOÀN (Safe Session Persistence) =====
-            // Tự động làm mới cookies với tần suất thấp để tránh bị FB quét
             try {
                 const stats = fs.statSync(cookiesPath);
                 const lastModified = stats.mtimeMs;
@@ -185,21 +208,29 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName) {
 
                 if (now - lastModified > oneHour) {
                     const latestCookies = await context.cookies();
-                    fs.writeFileSync(cookiesPath, JSON.stringify({ cookies: latestCookies }, null, 4), 'utf8');
-                    console.log(`[Scraper] 🔄 Safe Session Refresh: Cookies updated for ${path.basename(cookiesPath)}`);
+                    // PHÒNG VỆ: Chỉ lưu nếu có data thực sự (Tránh xóa trắng file khi logout)
+                    if (latestCookies && latestCookies.length > 10) {
+                        fs.writeFileSync(cookiesPath, JSON.stringify({ cookies: latestCookies }, null, 4), 'utf8');
+                        console.log(`[Scraper] 🔄 Safe Session Refresh: Cookies updated for ${path.basename(cookiesPath)}`);
+                    } else {
+                        console.log(`[Scraper] ⚠️ Skip periodic update: Fresh cookies data is suspicious (too few).`);
+                    }
                 }
             } catch (ce) {
                 console.log(`[Scraper] Skip periodic cookie update: ${ce.message}`);
             }
         }
 
-        await browser.close();
         return userData;
 
     } catch (error) {
         console.error('[Scraper] Error:', error.message);
-        if (browser) await browser.close();
         return null;
+    } finally {
+        if (browser) {
+            await browser.close();
+            console.log(`[Scraper] Browser closed properly.`);
+        }
     }
 }
 

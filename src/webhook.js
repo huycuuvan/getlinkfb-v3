@@ -15,6 +15,11 @@ const history = []; // Lưu lại lịch sử 20 message gần nhất
 const profileCache = new Map(); // Bộ nhớ đệm PSID -> profileLink
 const CACHE_FILE = path.resolve(__dirname, '../profile_cache.json');
 
+// Hàm helper lấy thời gian Việt Nam chuẩn
+function getVNTime(date = new Date()) {
+    return date.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+}
+
 // NẠP CACHE TỪ FILE KHI KHỞI ĐỘNG
 try {
     if (fs.existsSync(CACHE_FILE)) {
@@ -79,7 +84,7 @@ const handleWebhook = async (req, res, config) => {
 
                 const messageText = webhook_event.message.text || "";
                 const messageId = webhook_event.message.mid;
-                const timestamp = new Date(webhook_event.timestamp).toISOString();
+                const timestamp = new Date(webhook_event.timestamp).toISOString(); // Dùng ISO chuẩn cho hệ thống/webhook
 
                 // KIỂM SOÁT HÀNG ĐỢI (QUEUE)
                 const isActive = processingPsids.has(sender_psid);
@@ -148,7 +153,9 @@ async function processQueue() {
     } finally {
         activeWorkers--;
         processingPsids.delete(task.psid);
-        processQueue();
+
+        // TIẾP TỤC XỬ LÝ HÀNG ĐỢI (Nếu còn task)
+        setImmediate(() => processQueue());
     }
 }
 
@@ -236,12 +243,18 @@ async function processMessage(psid, pageConfig, pageId, messageText, messageId, 
                     }
                     break;
                 } else {
-                    console.log(`[Process] ⚠️ Account ${selectedAccount?.name} failed (Expired or No data). Trying next...`);
+                    console.log(`[Process] ⚠️ Account ${selectedAccount?.name} failed (Expired or No data).`);
                 }
             } catch (e) {
                 console.log(`[Process] Error with account ${selectedAccount?.name}: ${e.message}`);
             }
+
+            // ĐỢI 2 GIÂY TRƯỚC KHI THỬ ACC TIẾP THEO (Để server không quá tải)
             attempt++;
+            if (attempt < maxAttempts && !finalProfileLink) {
+                console.log(`[Process] Waiting 2s before next account attempt...`);
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
         }
     }
 
@@ -252,16 +265,16 @@ async function processMessage(psid, pageConfig, pageId, messageText, messageId, 
     console.log(`  Tên: ${finalName} (${graphName ? 'Graph API' : 'Browser'})`);
     console.log(`  Link: ${finalProfileLink || 'N/A'}`);
 
-    // Luôn lưu vào Google Sheet
+    // Luôn lưu vào Google Sheet (Dùng giờ VN)
     await appendToSheet(
-        [new Date().toLocaleString(), psid, finalName, finalProfileLink || "N/A", phoneNumber, pageConfig.name],
+        [getVNTime(new Date(timestamp)), psid, finalName, finalProfileLink || "N/A", phoneNumber, pageConfig.name],
         pageConfig.spreadsheet_id,
         pageConfig.sheet_name
     );
 
-    // Lưu vào history để hiện trên UI Admin
+    // Lưu vào history để hiện trên UI Admin (Dùng giờ VN)
     history.push({
-        time: new Date().toLocaleTimeString(),
+        time: new Date().toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
         psid,
         name: finalName,
         profileLink: finalProfileLink,
@@ -270,11 +283,11 @@ async function processMessage(psid, pageConfig, pageId, messageText, messageId, 
     });
     if (history.length > 50) history.shift();
 
-    // Gửi N8N nếu dữ liệu hợp lệ (có tên thật và KHÔNG phải link lỗi/checkpoint)
+    // Gửi N8N nếu dữ liệu hợp lệ (CÓ LINK và không phải hệ thống/lỗi)
+    const hasValidLink = finalProfileLink && !finalProfileLink.includes('login.php') && !finalProfileLink.includes('checkpoint');
     const isMessengerUser = finalName.includes("Người dùng Messenger") || finalName === "Khách hàng" || finalName === "Hộp thư";
-    const isLoginLink = finalProfileLink && (finalProfileLink.includes('login.php') || finalProfileLink.includes('checkpoint'));
 
-    if (!isMessengerUser && !isLoginLink) {
+    if (hasValidLink && !isMessengerUser) {
         const n8nPayload = {
             "source": "Inbox",
             "page_id": pageId,
@@ -282,13 +295,13 @@ async function processMessage(psid, pageConfig, pageId, messageText, messageId, 
             "m_id": messageId,
             "time_stamp": timestamp,
             "customer_name": finalName,
-            "customer_facebook_url": finalProfileLink || "N/A", // Gửi N/A nếu không có link
+            "customer_facebook_url": finalProfileLink,
             "text": messageText,
             "extracted_phone_number": phoneNumber
         };
         await sendToN8N(n8nPayload);
     } else {
-        console.log(`[Process] Skipping N8N for ${psid} (System user or Login/Error link)`);
+        console.log(`[Process] Skipping N8N for ${psid} (No link or System user)`);
     }
 }
 
