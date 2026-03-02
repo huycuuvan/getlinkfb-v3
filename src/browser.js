@@ -149,21 +149,30 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName) {
         let profileLink = "";
         const btnSelector = 'a:has-text("Xem trang cá nhân"), a:has-text("View profile")';
 
-        // Hàm lấy tên hiện tại trên UI
+        // Hàm lấy tên hiện tại trên UI và chuẩn hóa
         const getCurrentUIName = async () => {
-            const headings = await page.locator('h1, h2, h3, [role="heading"], div[role="main"] span[style*="font-weight: bold"]').allTextContents();
-            return headings.join(' ').toLowerCase().trim();
+            // Quét rộng hơn: Tiêu đề, các thẻ bôi đậm và cả vùng header của khung chat
+            const names = await page.locator('h1, h2, h3, [role="heading"], [role="main"] header span, div[role="complementary"] div[role="button"] span').allTextContents();
+            return names.join(' ').normalize('NFC').toLowerCase().trim();
+        };
+
+        const removeVNDiacritics = (str) => {
+            return str.normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D");
         };
 
         try {
-            const normalizedTarget = (targetName || "").toLowerCase().trim();
-            console.log(`[Scraper] 🔍 Waiting for UI to sync with: "${targetName}"...`);
+            const rawTarget = targetName || "";
+            const normalizedTarget = rawTarget.normalize('NFC').toLowerCase().trim();
+            const noToneTarget = removeVNDiacritics(normalizedTarget);
 
-            // Đợi đến khi tên khớp (Active Waiting - tối đa 20s)
+            console.log(`[Scraper] 🔍 Syncing UI for: "${rawTarget}"...`);
+
             let isMatch = false;
             for (let i = 0; i < 10; i++) {
                 const uiName = await getCurrentUIName();
-                if (normalizedTarget === "" || uiName.includes(normalizedTarget)) {
+
+                // So khớp có dấu hoặc không dấu (để an toàn tuyệt đối)
+                if (normalizedTarget === "" || uiName.includes(normalizedTarget) || (noToneTarget !== "" && removeVNDiacritics(uiName).includes(noToneTarget))) {
                     isMatch = true;
                     break;
                 }
@@ -265,4 +274,68 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName) {
     }
 }
 
-module.exports = { scrapeUserProfile };
+async function refreshAccount(specificCookiePath) {
+    const cookiesPath = specificCookiePath || path.resolve(__dirname, '../cookies.json');
+    const isHeadless = process.env.HEADLESS !== 'false';
+
+    const browser = await chromium.launch({
+        headless: isHeadless,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+
+    try {
+        const userAgents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        ];
+        const pathHash = cookiesPath.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a }, 0);
+        const selectedUA = userAgents[Math.abs(pathHash) % userAgents.length];
+
+        const context = await browser.newContext({ userAgent: selectedUA, locale: 'vi-VN', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+        if (fs.existsSync(cookiesPath)) {
+            const cookiesData = JSON.parse(fs.readFileSync(cookiesPath, 'utf8'));
+            const cookies = cookiesData.cookies || cookiesData;
+            await context.addCookies(cookies.map(c => ({
+                name: c.name, value: c.value, domain: c.domain, path: c.path,
+                expires: c.expires || c.expirationDate || -1,
+                httpOnly: c.httpOnly || false, secure: c.secure || true,
+                sameSite: (c.sameSite || 'Lax').charAt(0).toUpperCase() + (c.sameSite || 'Lax').slice(1).toLowerCase()
+            })));
+        }
+
+        const page = await context.newPage();
+        console.log(`[Maintenance] Refreshing session for: ${path.basename(cookiesPath)}`);
+
+        // Dạo quanh Facebook để duy trì login
+        await page.goto('https://www.facebook.com', { waitUntil: 'networkidle', timeout: 60000 });
+        await page.waitForTimeout(5000);
+
+        // Cuộn trang nhẹ nhàng như người thật
+        await page.evaluate(() => window.scrollBy(0, 500));
+        await page.waitForTimeout(2000);
+
+        const currentUrl = page.url();
+        if (currentUrl.includes('login') || currentUrl.includes('checkpoint')) {
+            console.log(`[Maintenance] ❌ Account session EXPIRED for ${path.basename(cookiesPath)}`);
+            return false;
+        }
+
+        // Lưu cookies mới
+        const latestCookies = await context.cookies();
+        if (latestCookies && latestCookies.length > 10) {
+            fs.writeFileSync(cookiesPath, JSON.stringify({ cookies: latestCookies }, null, 4), 'utf8');
+            console.log(`[Maintenance] ✅ Cookies updated for ${path.basename(cookiesPath)}`);
+            return true;
+        }
+        return false;
+    } catch (e) {
+        console.error(`[Maintenance] Error refreshing ${path.basename(cookiesPath)}:`, e.message);
+        return false;
+    } finally {
+        await browser.close();
+    }
+}
+
+module.exports = { scrapeUserProfile, refreshAccount };

@@ -35,7 +35,7 @@
             "value": "61578605914422",
             "domain": ".facebook.com",
             "path": "/",
-            "expires": 1803954382.743648,
+            "expires": 1803970468.44316,
             "httpOnly": false,
             "secure": true,
             "sameSite": "None"
@@ -65,34 +65,34 @@
             "value": "1920x1080",
             "domain": ".facebook.com",
             "path": "/",
-            "expires": 1773023190,
+            "expires": 1773039274,
             "httpOnly": false,
             "secure": true,
             "sameSite": "Lax"
         },
         {
             "name": "fr",
-            "value": "1ZMqBvPYYqFpafpMG.AWchZw7DK8-sSGpgJm6Yy1wbEV8D6Jij6ia4_cN3lKRHFoimQbo.BppPVO..AAA.0.0.BppPVO.AWdRFfiASOQg9XLcKV497CK9P-k",
+            "value": "1835REvkt9z6ULu4K.AWdpcWYZzTqerpFEHWgb2LIpxbrhjarwro2Maa3E-0-qjUflvfw.BppTQr..AAA.0.0.BppTQr.AWdbtrxCWZmJqQp1VWZ_FVA3-Hg",
             "domain": ".facebook.com",
             "path": "/",
-            "expires": 1780194382.744199,
+            "expires": 1780210468.443282,
             "httpOnly": true,
             "secure": true,
             "sameSite": "None"
         },
         {
             "name": "xs",
-            "value": "13%3A7p0QGB2CXnLSEA%3A2%3A1772336399%3A-1%3A-1%3A%3AAcwOAfxNII0Jpcmo2b03IvZ8pAtXJpfZUo_tRdwhaRE",
+            "value": "13%3A7p0QGB2CXnLSEA%3A2%3A1772336399%3A-1%3A-1%3A%3AAcxX0gLcgGHm701rahCpqJ3BgPBL4XUo-h89QRDU-ZM",
             "domain": ".facebook.com",
             "path": "/",
-            "expires": 1803954382.74459,
+            "expires": 1803970468.443373,
             "httpOnly": true,
             "secure": true,
             "sameSite": "None"
         },
         {
             "name": "presence",
-            "value": "C%7B%22t3%22%3A%5B%5D%2C%22utc3%22%3A1772418384975%2C%22v%22%3A1%7D",
+            "value": "C%7B%22t3%22%3A%5B%5D%2C%22utc3%22%3A1772434470670%2C%22v%22%3A1%7D",
             "domain": ".facebook.com",
             "path": "/",
             "expires": -1,
@@ -102,10 +102,10 @@
         },
         {
             "name": "alsfid",
-            "value": "{\"id\":\"ffc283773\",\"timestamp\":1772418393475.5}",
+            "value": "{\"id\":\"f2a03b186\",\"timestamp\":1772434482017.0999}",
             "domain": ".facebook.com",
             "path": "/",
-            "expires": 1772418453.476,
+            "expires": 1772434542.017205,
             "httpOnly": false,
             "secure": false,
             "sameSite": "Lax"

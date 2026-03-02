@@ -15,7 +15,7 @@
             "value": "l5WeaQqtf9ZJYFDKhLKczwpC",
             "domain": ".facebook.com",
             "path": "/",
-            "expires": 1806896598.782239,
+            "expires": 1806985465.31395,
             "httpOnly": true,
             "secure": true,
             "sameSite": "None"
@@ -55,7 +55,7 @@
             "value": "61578318701659",
             "domain": ".facebook.com",
             "path": "/",
-            "expires": 1803953861.410562,
+            "expires": 1803969220.137261,
             "httpOnly": false,
             "secure": true,
             "sameSite": "None"
@@ -65,14 +65,14 @@
             "value": "1920x1080",
             "domain": ".facebook.com",
             "path": "/",
-            "expires": 1773022668,
+            "expires": 1773038023,
             "httpOnly": false,
             "secure": true,
             "sameSite": "Lax"
         },
         {
             "name": "presence",
-            "value": "C%7B%22t3%22%3A%5B%5D%2C%22utc3%22%3A1772417861030%2C%22v%22%3A1%7D",
+            "value": "C%7B%22t3%22%3A%5B%5D%2C%22utc3%22%3A1772433219881%2C%22v%22%3A1%7D",
             "domain": ".facebook.com",
             "path": "/",
             "expires": -1,
@@ -82,30 +82,30 @@
         },
         {
             "name": "fr",
-            "value": "1uzoqGkA2cTMmP09c.AWdf3UOTA65YvxtlpbLNeIjm5_guEAs1krt32rfTU_9SrYOGjPI.BppPNF..AAA.0.0.BppPNF.AWeVrvh-C2RBA3_-ACI4g4a5YHM",
+            "value": "14oKLTxaiQi8uP928.AWdWb6p7Txw4XrCUjTiWjqdgzrGxHuI7_gQNZP1Deub0nzy_wHk.BppS9K..AAA.0.0.BppS9K.AWcmvd2ppWDXHdcUCzHvMBUOI8k",
             "domain": ".facebook.com",
             "path": "/",
-            "expires": 1780193861.410725,
+            "expires": 1780209220.137341,
             "httpOnly": true,
             "secure": true,
             "sameSite": "None"
         },
         {
             "name": "xs",
-            "value": "24%3AN5OeNOKFQdB7Pw%3A2%3A1772336602%3A-1%3A-1%3A%3AAcwjZIdK3r-uG74pI-kBYoP848RX13tXNqip6Yh7JvQ",
+            "value": "20%3Ath1t_qwLVe4INw%3A2%3A1772425469%3A-1%3A-1%3A%3AAcwT9PpJXqug7SUfBnYT0XHVg8KMSGj-N-9HEdQoavY",
             "domain": ".facebook.com",
             "path": "/",
-            "expires": 1803953861.410801,
+            "expires": 1803969220.137386,
             "httpOnly": true,
             "secure": true,
             "sameSite": "None"
         },
         {
             "name": "alsfid",
-            "value": "{\"id\":\"f8b07def8\",\"timestamp\":1772417870674.0999}",
+            "value": "{\"id\":\"fd515481e\",\"timestamp\":1772433231431.9}",
             "domain": ".facebook.com",
             "path": "/",
-            "expires": 1772417930.674454,
+            "expires": 1772433291.431851,
             "httpOnly": false,
             "secure": false,
             "sameSite": "Lax"

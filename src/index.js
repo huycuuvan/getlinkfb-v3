@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const { handleWebhook, verifyWebhook, getSystemStatus } = require('./webhook');
+const { startMaintenance } = require('./maintenance');
 const fs = require('fs');
 const path = require('path');
 
@@ -192,4 +193,7 @@ app.post('/api/admin/restart', (req, res) => {
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
     console.log(`Admin panel: http://localhost:${port}/admin`);
+
+    // Khởi động hệ thống nuôi tài khoản/refresh cookies định kỳ
+    startMaintenance(config);
 });

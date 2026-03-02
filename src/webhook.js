@@ -288,9 +288,9 @@ async function processMessage(psid, pageConfig, pageId, messageText, messageId, 
 
     // Gửi N8N nếu dữ liệu hợp lệ (CÓ LINK và không phải hệ thống/lỗi)
     const hasValidLink = finalProfileLink && !finalProfileLink.includes('login.php') && !finalProfileLink.includes('checkpoint');
-    const isMessengerUser = finalName.includes("Người dùng Messenger") || finalName === "Khách hàng" || finalName === "Hộp thư";
+    const isSystemUser = finalName === "Hộp thư"; // Chỉ chặn nếu là thông báo hệ thống "Hộp thư"
 
-    if (hasValidLink && !isMessengerUser) {
+    if (hasValidLink && !isSystemUser) {
         const n8nPayload = {
             "source": "Inbox",
             "page_id": pageId,
