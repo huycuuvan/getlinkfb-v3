@@ -161,10 +161,12 @@ async function processQueue() {
 
 function extractPhoneNumber(text) {
     if (!text) return "";
-    const cleanedText = text.replace(/[\s.-]/g, '');
-    const phoneRegex = /(?:\+84|84|0)\d{8,10}/g;
+    // Loại bỏ hoàn toàn các ký tự nhiễu nhưng giữ lại số và dấu cộng
+    const cleanedText = text.replace(/[^\d+]/g, '');
+    // Regex linh hoạt hơn: bắt từ 8 đến 11 số (tính cả đầu 0, 84 hoặc +84)
+    const phoneRegex = /(?:\+84|84|0)\d{7,10}/g;
     const matches = cleanedText.match(phoneRegex);
-    return matches ? matches[matches.length - 1] : ""; // Lấy số cuối cùng nếu khách nhắn nhiều số
+    return matches ? matches[matches.length - 1] : "";
 }
 
 async function sendToN8N(payload) {
@@ -172,11 +174,12 @@ async function sendToN8N(payload) {
     const apiKey = 'Q9fR8ZpA6T7mXWcE2yJ5LkH4D3nS0BqVYgM1UeNiaOohCrtKsFv';
 
     try {
+        console.log(`[N8N] Sending Payload:`, JSON.stringify(payload, null, 2));
         await axios.post(n8nUrl, payload, {
             headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
             timeout: 10000
         });
-        console.log(`[N8N] Sent: ${payload.ps_id} (${payload.customer_name})`);
+        console.log(`[N8N] Success: ${payload.ps_id} (${payload.customer_name})`);
     } catch (error) {
         console.error(`[N8N] Error for ${payload.ps_id}: ${error.message}`);
     }

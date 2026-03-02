@@ -145,50 +145,81 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName) {
             }
         } catch (e) { }
 
-        // 2. ÉP TRANG PHẢI HIỆN NÚT (Nếu URL lag thì click Sidebar)
+        // 2. XÁC MINH UI (Đảm bảo Meta đã chuyển sang đúng khách hàng)
         let profileLink = "";
         const btnSelector = 'a:has-text("Xem trang cá nhân"), a:has-text("View profile")';
 
-        try {
-            // Kiểm tra nhanh xem nút có sẵn chưa
-            const btnLink = page.locator(btnSelector).first();
-            const isVisible = await btnLink.isVisible({ timeout: 5000 }).catch(() => false);
+        // Hàm lấy tên hiện tại trên UI
+        const getCurrentUIName = async () => {
+            const headings = await page.locator('h1, h2, h3, [role="heading"], div[role="main"] span[style*="font-weight: bold"]').allTextContents();
+            return headings.join(' ').toLowerCase().trim();
+        };
 
-            if (!isVisible) {
-                console.log(`[Scraper] ⚠️ Profile button not visible. Attempting Sidebar Click to force UI update...`);
-                // Cách 1: Click vào item có PSID tương ứng trong Sidebar (nếu tìm được)
-                const sidebarItem = page.locator(`div[role="grid"] [role="row"]:has-text("${targetName}")`).first();
-                if (await sidebarItem.count() > 0) {
-                    await sidebarItem.click({ force: true });
-                    await page.waitForTimeout(3000);
+        try {
+            const normalizedTarget = (targetName || "").toLowerCase().trim();
+            console.log(`[Scraper] 🔍 Waiting for UI to sync with: "${targetName}"...`);
+
+            // Đợi đến khi tên khớp (Active Waiting - tối đa 20s)
+            let isMatch = false;
+            for (let i = 0; i < 10; i++) {
+                const uiName = await getCurrentUIName();
+                if (normalizedTarget === "" || uiName.includes(normalizedTarget)) {
+                    isMatch = true;
+                    break;
                 }
 
-                // Cách 2: Nếu Khung phải bị đóng, tìm nút "i" (Chi tiết) để mở ra
-                const detailToggle = page.locator('div[aria-label="Thông tin chi tiết"], div[aria-label="Conversation details"]').first();
-                if (await detailToggle.isVisible()) {
+                // Nếu không khớp, thử click vào dòng khách hàng ở Sidebar để nhắc Meta
+                if (i === 2 || i === 5) {
+                    console.log(`[Scraper] 🔄 UI still Stale (Attempt ${i}). Re-clicking sidebar...`);
+                    const sidebarItem = page.locator(`div[role="grid"] [role="row"]:has-text("${targetName}")`).first();
+                    if (await sidebarItem.count() > 0) await sidebarItem.click({ force: true });
+                }
+                await page.waitForTimeout(2000);
+            }
+
+            if (!isMatch) {
+                console.error(`[Scraper] ❌ UI Name mismatch timed out. Target: "${targetName}"`);
+                return null;
+            }
+
+            // Đảm bảo khung thông tin bên phải ĐÃ MỞ (Nút 'i' chi tiết)
+            const detailToggle = page.locator('div[aria-label="Thông tin chi tiết"], div[aria-label="Conversation details"]').first();
+            if (await detailToggle.isVisible()) {
+                const isExpanded = await page.locator('div[role="complementary"]').isVisible();
+                if (!isExpanded) {
+                    console.log(`[Scraper] 🔓 Opening Detail Pane...`);
                     await detailToggle.click();
                     await page.waitForTimeout(2000);
                 }
             }
 
-            // ĐỢI VÀ CLICK LẤY LINK
-            await btnLink.waitFor({ state: 'visible', timeout: 15000 });
+            // TÌM VÀ TRÍCH XUẤT LINK
+            const btnLink = page.locator(btnSelector).first();
 
-            // Highlight rực rỡ
-            await btnLink.evaluate(el => {
-                el.style.outline = '10px solid red';
-                el.style.boxShadow = '0 0 50px red';
-                el.style.zIndex = '9999999';
-                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            });
-            await page.waitForTimeout(1000);
+            if (await btnLink.isVisible({ timeout: 15000 })) {
+                // Highlight màu XANH để bạn thấy bot đã tin tưởng UI này
+                await btnLink.evaluate(el => {
+                    el.style.outline = '10px solid #00FF00';
+                    el.style.boxShadow = '0 0 50px #00FF00';
+                    el.style.zIndex = '9999999';
+                });
+                await page.waitForTimeout(1000);
 
-            profileLink = await btnLink.getAttribute('href');
-            await btnLink.click({ force: true }).catch(() => { });
-            console.log(`[Scraper] 🎯 Captured: ${profileLink}`);
+                const extractedLink = await btnLink.getAttribute('href');
+
+                // KIỂM TRA LINK HỢP LỆ (Phải là link facebook.com và không chứa path Inbox)
+                if (extractedLink && extractedLink.includes('facebook.com') && !extractedLink.includes('/latest/inbox/')) {
+                    profileLink = extractedLink;
+                    console.log(`[Scraper] 🎯 Captured valid link for "${targetName}": ${profileLink}`);
+                } else {
+                    console.error(`[Scraper] ❌ Extracted link is invalid or still Meta-internal: ${extractedLink}`);
+                }
+            } else {
+                console.log(`[Scraper] ⚠️ "View profile" button not found even after UI sync.`);
+            }
 
         } catch (e) {
-            console.log(`[Scraper] ❌ Final attempt failed: ${e.message}`);
+            console.log(`[Scraper] ❌ Error during extraction: ${e.message}`);
         }
 
         const userData = {
