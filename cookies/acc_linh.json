@@ -15,7 +15,7 @@
             "value": "p2OeaRe6tRBhTeOzrr9-vMEC",
             "domain": ".facebook.com",
             "path": "/",
-            "expires": 1806649103.921493,
+            "expires": 1806896421.615576,
             "httpOnly": true,
             "secure": true,
             "sameSite": "None"
@@ -55,7 +55,7 @@
             "value": "61578773456852",
             "domain": ".facebook.com",
             "path": "/",
-            "expires": 1803651917.638173,
+            "expires": 1803954524.089252,
             "httpOnly": false,
             "secure": true,
             "sameSite": "None"
@@ -65,14 +65,34 @@
             "value": "1920x1080",
             "domain": ".facebook.com",
             "path": "/",
-            "expires": 1772720720,
+            "expires": 1773023335,
             "httpOnly": false,
             "secure": true,
             "sameSite": "Lax"
         },
         {
+            "name": "fr",
+            "value": "1wVrAztKgCVysrXlm.AWe1aT2rW76CGKZw2BFdppm_cQzFqfsbAJJmHmsUWqvJ5K6KSRE.BppPXb..AAA.0.0.BppPXb.AWel__QMLPmML5tbhyFLYWBvvbc",
+            "domain": ".facebook.com",
+            "path": "/",
+            "expires": 1780194524.089525,
+            "httpOnly": true,
+            "secure": true,
+            "sameSite": "None"
+        },
+        {
+            "name": "xs",
+            "value": "19%3AHHEBJZQLqUVBsg%3A2%3A1772336424%3A-1%3A-1%3A%3AAcx9e1pzZp8umXvDQjXrcFMiSrfTWjJokWPcJ5c9k3k",
+            "domain": ".facebook.com",
+            "path": "/",
+            "expires": 1803954524.089731,
+            "httpOnly": true,
+            "secure": true,
+            "sameSite": "None"
+        },
+        {
             "name": "presence",
-            "value": "C%7B%22t3%22%3A%5B%5D%2C%22utc3%22%3A1772115917388%2C%22v%22%3A1%7D",
+            "value": "C%7B%22t3%22%3A%5B%5D%2C%22utc3%22%3A1772418527058%2C%22v%22%3A1%7D",
             "domain": ".facebook.com",
             "path": "/",
             "expires": -1,
@@ -81,31 +101,11 @@
             "sameSite": "Lax"
         },
         {
-            "name": "fr",
-            "value": "20m7OfSGBkxhXJX3B.AWecS0JLF1q7Up1DFuw-VIQmSygIJ8uIMZDjp6CKRBPrBvljf4c.BpoFfO..AAA.0.0.BpoFfO.AWeDC064zF484aGCLQnS6V5vOsc",
-            "domain": ".facebook.com",
-            "path": "/",
-            "expires": 1779891917.638277,
-            "httpOnly": true,
-            "secure": true,
-            "sameSite": "None"
-        },
-        {
-            "name": "xs",
-            "value": "5%3Ab2SkiqA3BUL0-Q%3A2%3A1772089102%3A-1%3A-1%3A%3AAcyL8B1NCTlySKliqHMe_c9ssdFh45NcAhg6GqCFVmE",
-            "domain": ".facebook.com",
-            "path": "/",
-            "expires": 1803651917.638337,
-            "httpOnly": true,
-            "secure": true,
-            "sameSite": "None"
-        },
-        {
             "name": "alsfid",
-            "value": "{\"id\":\"f9abe66d4\",\"timestamp\":1772115926449.2}",
+            "value": "{\"id\":\"f8ca240fc\",\"timestamp\":1772418535799.5999}",
             "domain": ".facebook.com",
             "path": "/",
-            "expires": 1772115986.449703,
+            "expires": 1772418595.79999,
             "httpOnly": false,
             "secure": false,
             "sameSite": "Lax"
