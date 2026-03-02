@@ -55,7 +55,7 @@
             "value": "61578318701659",
             "domain": ".facebook.com",
             "path": "/",
-            "expires": 1803973221.89679,
+            "expires": 1803982974.031012,
             "httpOnly": false,
             "secure": true,
             "sameSite": "None"
@@ -65,14 +65,14 @@
             "value": "1920x1080",
             "domain": ".facebook.com",
             "path": "/",
-            "expires": 1773042025,
+            "expires": 1773051777,
             "httpOnly": false,
             "secure": true,
             "sameSite": "Lax"
         },
         {
             "name": "presence",
-            "value": "C%7B%22t3%22%3A%5B%5D%2C%22utc3%22%3A1772437221676%2C%22v%22%3A1%7D",
+            "value": "C%7B%22lm3%22%3A%22u.232546149932540%22%2C%22t3%22%3A%5B%5D%2C%22utc3%22%3A1772446973927%2C%22v%22%3A1%7D",
             "domain": ".facebook.com",
             "path": "/",
             "expires": -1,
@@ -82,30 +82,30 @@
         },
         {
             "name": "fr",
-            "value": "1M0A72hdofr1dZAQd.AWfedMwE86zs5RMEeZ5qpOGfCA5FMzo2tYHp2RuvBJ0Cr4ro0f4.BppT7s..AAA.0.0.BppT7s.AWctVpsA9f7ugIP5hMVXocIRe1Y",
+            "value": "1aacqJ9m1jx8Kbxn2.AWeOWkWSrKwNk3oOFGdJHBFIZHUKLPQITY_95Mc3eQPzX567W4I.BppWUE..AAA.0.0.BppWUE.AWcr7-N2j2AiwFyYqDuPVluEASM",
             "domain": ".facebook.com",
             "path": "/",
-            "expires": 1780213221.896871,
+            "expires": 1780222974.031078,
             "httpOnly": true,
             "secure": true,
             "sameSite": "None"
         },
         {
             "name": "xs",
-            "value": "20%3Ath1t_qwLVe4INw%3A2%3A1772425469%3A-1%3A-1%3A%3AAcxVfgIzuG0H7-6cFAsiCXiYdr5-5WDn0oobcRuPNwk",
+            "value": "20%3Ath1t_qwLVe4INw%3A2%3A1772425469%3A-1%3A-1%3A%3AAcw6o1ks2g8n9pj1OA2SiLy0bopMe2mBAxGVpoHrZrA",
             "domain": ".facebook.com",
             "path": "/",
-            "expires": 1803973221.896933,
+            "expires": 1803982974.031124,
             "httpOnly": true,
             "secure": true,
             "sameSite": "None"
         },
         {
             "name": "alsfid",
-            "value": "{\"id\":\"fa1b55f41\",\"timestamp\":1772437233274.7}",
+            "value": "{\"id\":\"f22903a38\",\"timestamp\":1772446985335.4}",
             "domain": ".facebook.com",
             "path": "/",
-            "expires": 1772437293.274684,
+            "expires": 1772447045.335703,
             "httpOnly": false,
             "secure": false,
             "sameSite": "Lax"

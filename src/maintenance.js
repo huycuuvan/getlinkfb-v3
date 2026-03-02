@@ -17,7 +17,7 @@ async function runMaintenance(config) {
     for (const acc of accounts) {
         const fullPath = path.resolve(__dirname, '..', acc.cookie_file);
         try {
-            await refreshAccount(fullPath);
+            await refreshAccount(fullPath, acc);
             // Đợi 10 giây giữa mỗi acc để tránh dồn dập
             await new Promise(resolve => setTimeout(resolve, 10000));
         } catch (e) {

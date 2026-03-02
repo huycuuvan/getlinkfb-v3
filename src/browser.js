@@ -1,8 +1,69 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
+const { authenticator } = require('otplib');
 
-async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName) {
+/**
+ * Tự động đăng nhập Facebook nếu bị logout hoặc hết hạn cookies
+ */
+async function handleAutoLogin(page, accData, cookiesPath) {
+    if (!accData || !accData.uid || !accData.pass) return false;
+
+    console.log(`[AutoLogin] 🛡️ Attempting login for ${accData.name}...`);
+    try {
+        await page.goto('https://www.facebook.com/login', { waitUntil: 'networkidle', timeout: 60000 });
+
+        // Nhập ID và Pass
+        await page.fill('input[id="email"]', accData.uid);
+        await page.fill('input[id="pass"]', accData.pass);
+        await page.click('button[name="login"]');
+        await page.waitForTimeout(5000);
+
+        // Kiểm tra xem có đòi 2FA không
+        const currentUrl = page.url();
+        if (currentUrl.includes('checkpoint')) {
+            console.log(`[AutoLogin] 🔑 2FA Required...`);
+
+            // Tìm ô nhập mã 2FA (thông thường là input có type=text hoặc số)
+            const otpInput = page.locator('input[type="text"], input[name="approvals_code"]').first();
+            if (await otpInput.isVisible() && accData.twoFactorSecret) {
+                const token = authenticator.generate(accData.twoFactorSecret.replace(/\s+/g, ''));
+                console.log(`[AutoLogin] 🎰 Generated 2FA Code: ${token}`);
+                await otpInput.fill(token);
+
+                // Click nút xác nhận
+                const submitBtn = page.locator('button:has-text("Tiếp tục"), button:has-text("Continue"), button[id="checkpointSubmitButton"]').first();
+                await submitBtn.click();
+                await page.waitForTimeout(5000);
+
+                // Deal với màn hình "Tin cậy trình duyệt này"
+                const trustBtn = page.locator('button:has-text("Tiếp tục"), button:has-text("Continue"), button[id="checkpointSubmitButton"]').first();
+                if (await trustBtn.isVisible()) {
+                    await trustBtn.click();
+                    await page.waitForTimeout(5000);
+                }
+            }
+        }
+
+        // Kiểm tra thành công
+        await page.goto('https://www.facebook.com', { waitUntil: 'domcontentloaded' });
+        if (page.url().includes('login') || page.url().includes('checkpoint')) {
+            console.error(`[AutoLogin] ❌ Login failed for ${accData.name}`);
+            return false;
+        }
+
+        console.log(`[AutoLogin] ✅ Login SUCCESS for ${accData.name}. Saving fresh cookies...`);
+        const latestCookies = await page.context().cookies();
+        fs.writeFileSync(cookiesPath, JSON.stringify({ cookies: latestCookies }, null, 4), 'utf8');
+        return true;
+
+    } catch (e) {
+        console.error(`[AutoLogin] ❌ Critical error during login: ${e.message}`);
+        return false;
+    }
+}
+
+async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName, accData = null) {
     const cookiesPath = specificCookiePath || process.env.FB_COOKIES_PATH || path.resolve(__dirname, '../cookies.json');
     // Mặc định chạy ẩn (headless) trên server, có thể chỉnh qua biến môi trường
     const isHeadless = process.env.HEADLESS !== 'false';
@@ -100,12 +161,19 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName) {
         console.log(`[Scraper] Navigating to Inbox: ${inboxUrl}`);
         await page.goto(inboxUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-        // ===== PHÁT HIỆN COOKIES HẾT HẠN =====
+        // ===== PHÁT HIỆN COOKIES HẾT HẠN - KÍCH HOẠT AUTO LOGIN =====
         await page.waitForTimeout(4000);
         let currentUrl = page.url();
         if (currentUrl.includes('login') || currentUrl.includes('checkpoint')) {
-            console.log(`[Scraper] ❌ COOKIES HẾT HẠN! Redirect to: ${currentUrl}`);
-            return null; // Sẽ nhảy vào finally để đóng browser
+            console.log(`[Scraper] ❌ COOKIES EXPIRED! Starting Auto Login Recovery for ${accData?.name || 'Account'}...`);
+            const loginSuccess = await handleAutoLogin(page, accData, cookiesPath);
+            if (!loginSuccess) {
+                console.error(`[Scraper] 🛑 Recovery failed. Aborting.`);
+                return null;
+            }
+            // Sau khi login xong, quay lại Inbox
+            await page.goto(inboxUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+            await page.waitForTimeout(4000);
         }
 
         // ===== KIỂM TRA UI & RELOAD (Phòng chống trang trắng/lag) =====
@@ -160,28 +228,47 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName) {
             return str.normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D");
         };
 
+        const checkMatchFuzzy = (uiText, target) => {
+            if (!target || target === "" || target === "Khách hàng") return true;
+
+            const cleanUI = removeVNDiacritics(uiText.toLowerCase());
+            const cleanTarget = removeVNDiacritics(target.toLowerCase());
+
+            // 1. Khớp thẳng
+            if (cleanUI.includes(cleanTarget)) return true;
+
+            // 2. Khớp từng từ (cho phép đảo thứ tự Họ Tên)
+            const targetWords = cleanTarget.split(/\s+/).filter(w => w.length > 2); // Chỉ tính từ > 2 ký tự
+            if (targetWords.length === 0) return true;
+
+            const allWordsMatch = targetWords.every(word => cleanUI.includes(word));
+            return allWordsMatch;
+        };
+
         try {
             const rawTarget = targetName || "";
-            const normalizedTarget = rawTarget.normalize('NFC').toLowerCase().trim();
-            const noToneTarget = removeVNDiacritics(normalizedTarget);
-
             console.log(`[Scraper] 🔍 Syncing UI for: "${rawTarget}"...`);
 
             let isMatch = false;
             for (let i = 0; i < 10; i++) {
-                const uiName = await getCurrentUIName();
+                const uiNameRaw = await getCurrentUIName();
 
-                // So khớp có dấu hoặc không dấu (để an toàn tuyệt đối)
-                if (normalizedTarget === "" || uiName.includes(normalizedTarget) || (noToneTarget !== "" && removeVNDiacritics(uiName).includes(noToneTarget))) {
+                if (checkMatchFuzzy(uiNameRaw, rawTarget)) {
                     isMatch = true;
                     break;
                 }
 
-                // Nếu không khớp, thử click vào dòng khách hàng ở Sidebar để nhắc Meta
+                // Nếu không khớp, thử click vào dòng khách hàng ở Sidebar
                 if (i === 2 || i === 5) {
                     console.log(`[Scraper] 🔄 UI still Stale (Attempt ${i}). Re-clicking sidebar...`);
-                    const sidebarItem = page.locator(`div[role="grid"] [role="row"]:has-text("${targetName}")`).first();
-                    if (await sidebarItem.count() > 0) await sidebarItem.click({ force: true });
+                    // Tìm theo từ cuối cùng của tên (thử vận may với Tên chính)
+                    const nameParts = rawTarget.split(' ');
+                    const searchName = nameParts[nameParts.length - 1];
+                    const sidebarItem = page.locator(`div[role="grid"] [role="row"]:has-text("${searchName}")`).first();
+
+                    if (await sidebarItem.count() > 0) {
+                        await sidebarItem.click({ force: true });
+                    }
                 }
                 await page.waitForTimeout(2000);
             }
@@ -274,7 +361,7 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName) {
     }
 }
 
-async function refreshAccount(specificCookiePath) {
+async function refreshAccount(specificCookiePath, accData = null) {
     const cookiesPath = specificCookiePath || path.resolve(__dirname, '../cookies.json');
     const isHeadless = process.env.HEADLESS !== 'false';
 
@@ -306,27 +393,33 @@ async function refreshAccount(specificCookiePath) {
         }
 
         const page = await context.newPage();
-        console.log(`[Maintenance] Refreshing session for: ${path.basename(cookiesPath)}`);
+        console.log(`[Maintenance] Checking session for: ${path.basename(cookiesPath)}`);
 
         // Dạo quanh Facebook để duy trì login
-        await page.goto('https://www.facebook.com', { waitUntil: 'networkidle', timeout: 60000 });
+        await page.goto('https://www.facebook.com', { waitUntil: 'domcontentloaded', timeout: 60000 });
         await page.waitForTimeout(5000);
+
+        let currentUrl = page.url();
+        if (currentUrl.includes('login') || currentUrl.includes('checkpoint')) {
+            console.log(`[Maintenance] ❌ Cookies EXPIRED for ${accData?.name || 'Account'}. Starting Auto Login...`);
+            const loginSuccess = await handleAutoLogin(page, accData, cookiesPath);
+            if (!loginSuccess) {
+                console.error(`[Maintenance] 🛑 Auto Login failed.`);
+                return false;
+            }
+            // Đã login thành công, refresh lại page
+            await page.goto('https://www.facebook.com', { waitUntil: 'domcontentloaded' });
+        }
 
         // Cuộn trang nhẹ nhàng như người thật
         await page.evaluate(() => window.scrollBy(0, 500));
         await page.waitForTimeout(2000);
 
-        const currentUrl = page.url();
-        if (currentUrl.includes('login') || currentUrl.includes('checkpoint')) {
-            console.log(`[Maintenance] ❌ Account session EXPIRED for ${path.basename(cookiesPath)}`);
-            return false;
-        }
-
-        // Lưu cookies mới
+        // Lưu cookies mới (đã login thành công hoặc session vẫn sống)
         const latestCookies = await context.cookies();
         if (latestCookies && latestCookies.length > 10) {
             fs.writeFileSync(cookiesPath, JSON.stringify({ cookies: latestCookies }, null, 4), 'utf8');
-            console.log(`[Maintenance] ✅ Cookies updated for ${path.basename(cookiesPath)}`);
+            console.log(`[Maintenance] ✅ Session refreshed/updated for ${accData?.name || path.basename(cookiesPath)}`);
             return true;
         }
         return false;

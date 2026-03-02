@@ -208,7 +208,7 @@ async function processMessage(psid, pageConfig, pageId, messageText, messageId, 
         console.log(`[Process] ⚡ Cache Hit! Using stored link for ${psid}: ${finalProfileLink}`);
     } else {
         const accounts = require('../config.json').accounts || [];
-        const maxAttempts = Math.min(accounts.length, 3);
+        const maxAttempts = accounts.length || 1;
         let attempt = 0;
 
         while (attempt < maxAttempts) {
@@ -227,7 +227,7 @@ async function processMessage(psid, pageConfig, pageId, messageText, messageId, 
             }
 
             try {
-                const browserData = await scrapeUserProfile(psid, pageId, cookiePath, graphName);
+                const browserData = await scrapeUserProfile(psid, pageId, cookiePath, graphName, selectedAccount);
                 if (browserData && (browserData.profileLink || browserData.name !== "Khách hàng")) {
                     finalProfileLink = browserData.profileLink || "";
                     browserName = browserData.name || "";
