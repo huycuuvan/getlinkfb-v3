@@ -44,7 +44,8 @@ async function getUserFromGraphAPI(psid, pageId, accessToken) {
             console.log(`[GraphAPI] ✅ Found: ${customer.name} (${customer.id})`);
             return {
                 name: customer.name,
-                psid: customer.id
+                psid: customer.id,
+                threadId: conversations[0].id // Thêm Conversation Thread ID
             };
         }
 

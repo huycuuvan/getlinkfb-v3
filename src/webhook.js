@@ -193,9 +193,13 @@ async function processMessage(psid, pageConfig, pageId, messageText, messageId, 
 
     // ===== BƯỚC 1: GRAPH API lấy TÊN (SIÊU AN TOÀN) =====
     let graphName = null;
+    let threadId = null;
     try {
         const graphData = await getUserFromGraphAPI(psid, pageId, accessToken);
-        if (graphData && graphData.name) graphName = graphData.name;
+        if (graphData) {
+            graphName = graphData.name;
+            threadId = graphData.threadId;
+        }
     } catch (e) {
         console.log(`[Process] Graph API failed: ${e.message}`);
     }
@@ -227,7 +231,7 @@ async function processMessage(psid, pageConfig, pageId, messageText, messageId, 
             }
 
             try {
-                const browserData = await scrapeUserProfile(psid, pageId, cookiePath, graphName, selectedAccount);
+                const browserData = await scrapeUserProfile(psid, pageId, cookiePath, graphName, selectedAccount, threadId);
                 if (browserData && (browserData.profileLink || browserData.name !== "Khách hàng")) {
                     finalProfileLink = browserData.profileLink || "";
                     browserName = browserData.name || "";

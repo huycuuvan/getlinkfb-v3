@@ -3,40 +3,70 @@ const fs = require('fs');
 const path = require('path');
 const { authenticator } = require('otplib');
 
+
 /**
- * Tự động đăng nhập Facebook nếu bị logout hoặc hết hạn cookies
+ * Tự động đăng nhập Facebook với 2FA
  */
 async function handleAutoLogin(page, accData, cookiesPath) {
-    if (!accData || !accData.uid || !accData.pass) return false;
+    if (!accData || !accData.uid || !accData.pass) {
+        console.error(`[AutoLogin] ❌ Missing credentials for ${accData?.name || 'Unknown'}`);
+        return false;
+    }
 
     console.log(`[AutoLogin] 🛡️ Attempting login for ${accData.name}...`);
     try {
         await page.goto('https://www.facebook.com/login', { waitUntil: 'networkidle', timeout: 60000 });
+        await page.waitForTimeout(3000);
 
-        // Nhập ID và Pass
-        await page.fill('input[id="email"]', accData.uid);
-        await page.fill('input[id="pass"]', accData.pass);
-        await page.click('button[name="login"]');
-        await page.waitForTimeout(5000);
+        // 1. XỬ LÝ MÀN HÌNH "TÀI KHOẢN ĐÃ LƯU"
+        const switchAccountBtn = page.locator('a:has-text("Dùng trang cá nhân khác"), a:has-text("Log Into Another Account"), [role="button"]:has-text("Dùng trang cá nhân khác")').first();
+        if (await switchAccountBtn.isVisible()) {
+            console.log(`[AutoLogin] 🔄 Switching to fresh login form...`);
+            await switchAccountBtn.click();
+            await page.waitForTimeout(3000);
+        }
 
-        // Kiểm tra xem có đòi 2FA không
-        const currentUrl = page.url();
+        // 2. ĐIỀN FORM LOGIN
+        const emailInput = page.locator('input[name="email"], input[id="email"], input[aria-label*="Email"]').first();
+        const passInput = page.locator('input[name="pass"], input[id="pass"], input[aria-label*="mật khẩu"]').first();
+        const loginBtn = page.locator('button[name="login"], button[type="submit"]:has-text("Đăng nhập"), button:has-text("Log In")').first();
+
+        if (await emailInput.isVisible()) {
+            await emailInput.fill(accData.uid);
+            await passInput.fill(accData.pass);
+            await loginBtn.click();
+            await page.waitForTimeout(5000);
+        } else {
+            const continueBtn = page.locator('button:has-text("Tiếp tục"), button:has-text("Continue")').first();
+            if (await continueBtn.isVisible()) {
+                await continueBtn.click();
+                await page.waitForTimeout(5000);
+            }
+        }
+
+        // 3. KIỂM TRA 2FA
+        let currentUrl = page.url();
         if (currentUrl.includes('checkpoint')) {
             console.log(`[AutoLogin] 🔑 2FA Required...`);
 
-            // Tìm ô nhập mã 2FA (thông thường là input có type=text hoặc số)
-            const otpInput = page.locator('input[type="text"], input[name="approvals_code"]').first();
+            // Bấm qua các màn hình trung gian nếu có
+            const cpContinue = page.locator('button:has-text("Tiếp tục"), button:has-text("Continue"), button[id="checkpointSubmitButton"]').first();
+            if (await cpContinue.isVisible()) {
+                await cpContinue.click();
+                await page.waitForTimeout(4000);
+            }
+
+            const otpInput = page.locator('input[type="text"], input[name="approvals_code"], input[placeholder*="6 chữ số"]').first();
             if (await otpInput.isVisible() && accData.twoFactorSecret) {
                 const token = authenticator.generate(accData.twoFactorSecret.replace(/\s+/g, ''));
                 console.log(`[AutoLogin] 🎰 Generated 2FA Code: ${token}`);
                 await otpInput.fill(token);
 
-                // Click nút xác nhận
                 const submitBtn = page.locator('button:has-text("Tiếp tục"), button:has-text("Continue"), button[id="checkpointSubmitButton"]').first();
                 await submitBtn.click();
                 await page.waitForTimeout(5000);
 
-                // Deal với màn hình "Tin cậy trình duyệt này"
+                // Tin cậy trình duyệt
                 const trustBtn = page.locator('button:has-text("Tiếp tục"), button:has-text("Continue"), button[id="checkpointSubmitButton"]').first();
                 if (await trustBtn.isVisible()) {
                     await trustBtn.click();
@@ -45,25 +75,25 @@ async function handleAutoLogin(page, accData, cookiesPath) {
             }
         }
 
-        // Kiểm tra thành công
+        // 4. XÁC NHẬN THÀNH CÔNG
         await page.goto('https://www.facebook.com', { waitUntil: 'domcontentloaded' });
         if (page.url().includes('login') || page.url().includes('checkpoint')) {
             console.error(`[AutoLogin] ❌ Login failed for ${accData.name}`);
             return false;
         }
 
-        console.log(`[AutoLogin] ✅ Login SUCCESS for ${accData.name}. Saving fresh cookies...`);
+        console.log(`[AutoLogin] ✅ Login SUCCESS. Updating cookies...`);
         const latestCookies = await page.context().cookies();
         fs.writeFileSync(cookiesPath, JSON.stringify({ cookies: latestCookies }, null, 4), 'utf8');
         return true;
 
     } catch (e) {
-        console.error(`[AutoLogin] ❌ Critical error during login: ${e.message}`);
+        console.error(`[AutoLogin] ❌ Critical Error: ${e.message}`);
         return false;
     }
 }
 
-async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName, accData = null) {
+async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName, accData = null, threadId = null) {
     const cookiesPath = specificCookiePath || process.env.FB_COOKIES_PATH || path.resolve(__dirname, '../cookies.json');
     // Mặc định chạy ẩn (headless) trên server, có thể chỉnh qua biến môi trường
     const isHeadless = process.env.HEADLESS !== 'false';
@@ -148,9 +178,10 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName, a
 
     try {
         // Option 1: Meta Business Suite Inbox
-        // Link format: https://business.facebook.com/latest/inbox/all/?asset_id=[PAGE_ID]&selected_item_id=[PSID]
-        const inboxUrl = `https://business.facebook.com/latest/inbox/all/?asset_id=${pageId}&selected_item_id=${psid}`;
-        console.log(`Navigating to Meta Business Suite: ${inboxUrl}`);
+        // TRANG CÁ NHÂN SỬ DỤNG ThreadId (nếu có) hoặc PSID
+        const targetId = threadId || psid;
+        const inboxUrl = `https://business.facebook.com/latest/inbox/all/?asset_id=${pageId}&selected_item_id=${targetId}`;
+        console.log(`Navigating to Meta Business Suite: ${inboxUrl} (Using ${threadId ? 'ThreadId' : 'PSID'})`);
 
         // ===== BƯỚC 1: WARM-UP COOKIES (vô facebook.com trước) =====
         console.log(`[Scraper] Warming up cookies at facebook.com...`);
@@ -165,7 +196,7 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName, a
         await page.waitForTimeout(4000);
         let currentUrl = page.url();
         if (currentUrl.includes('login') || currentUrl.includes('checkpoint')) {
-            console.log(`[Scraper] ❌ COOKIES EXPIRED! Starting Auto Login Recovery for ${accData?.name || 'Account'}...`);
+            console.log(`[Scraper] ❌ COOKIES EXPIRED! Starting Auto Login for ${accData?.name || 'Account'}...`);
             const loginSuccess = await handleAutoLogin(page, accData, cookiesPath);
             if (!loginSuccess) {
                 console.error(`[Scraper] 🛑 Recovery failed. Aborting.`);
@@ -258,8 +289,31 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName, a
                     break;
                 }
 
+                // NẾU CỐ GẮNG BẰNG URL VẪN SAI ID -> DÙNG SEARCH BOX (CỰC KỲ QUAN TRỌNG)
+                if (i === 1) {
+                    console.log(`[Scraper] 🔍 Navigation failed to land on target. Attempting Search Fallback...`);
+                    try {
+                        const searchInput = page.locator('input[placeholder*="Tìm kiếm"], input[placeholder*="Search"]').first();
+                        if (await searchInput.isVisible()) {
+                            await searchInput.click();
+                            await page.keyboard.type(rawTarget, { delay: 100 });
+                            await page.waitForTimeout(3000);
+
+                            // Click vào kết quả đầu tiên xuất hiện
+                            const firstResult = page.locator('div[role="grid"] [role="row"], [role="listbox"] [role="option"]').first();
+                            if (await firstResult.isVisible()) {
+                                await firstResult.click();
+                                console.log(`[Scraper] 🎯 Search & Clicked on result for: ${rawTarget}`);
+                                await page.waitForTimeout(2000);
+                            }
+                        }
+                    } catch (se) {
+                        console.log(`[Scraper] Search Fallback error: ${se.message}`);
+                    }
+                }
+
                 // Nếu không khớp, thử click vào dòng khách hàng ở Sidebar
-                if (i === 2 || i === 5) {
+                if (i === 3 || i === 6) {
                     console.log(`[Scraper] 🔄 UI still Stale (Attempt ${i}). Re-clicking sidebar...`);
                     // Tìm theo từ cuối cùng của tên (thử vận may với Tên chính)
                     const nameParts = rawTarget.split(' ');
@@ -401,13 +455,9 @@ async function refreshAccount(specificCookiePath, accData = null) {
 
         let currentUrl = page.url();
         if (currentUrl.includes('login') || currentUrl.includes('checkpoint')) {
-            console.log(`[Maintenance] ❌ Cookies EXPIRED for ${accData?.name || 'Account'}. Starting Auto Login...`);
+            console.log(`[Maintenance] ❌ Session EXPIRED for ${accData?.name || 'Account'}. Auto Logging...`);
             const loginSuccess = await handleAutoLogin(page, accData, cookiesPath);
-            if (!loginSuccess) {
-                console.error(`[Maintenance] 🛑 Auto Login failed.`);
-                return false;
-            }
-            // Đã login thành công, refresh lại page
+            if (!loginSuccess) return false;
             await page.goto('https://www.facebook.com', { waitUntil: 'domcontentloaded' });
         }
 
