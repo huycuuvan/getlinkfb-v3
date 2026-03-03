@@ -1,97 +1,7 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
-const { authenticator } = require('otplib');
 
-
-/**
- * Tự động đăng nhập Facebook với 2FA
- */
-async function handleAutoLogin(page, accData, cookiesPath) {
-    if (!accData || !accData.uid || !accData.pass) {
-        console.error(`[AutoLogin] ❌ Missing credentials for ${accData?.name || 'Unknown'}`);
-        return false;
-    }
-
-    console.log(`[AutoLogin] 🛡️ Attempting login for ${accData.name}...`);
-    try {
-        await page.goto('https://www.facebook.com/login', { waitUntil: 'networkidle', timeout: 60000 });
-        await page.waitForTimeout(3000);
-
-        // 1. XỬ LÝ MÀN HÌNH "TÀI KHOẢN ĐÃ LƯU"
-        const switchAccountBtn = page.locator('a:has-text("Dùng trang cá nhân khác"), a:has-text("Log Into Another Account"), [role="button"]:has-text("Dùng trang cá nhân khác")').first();
-        if (await switchAccountBtn.isVisible()) {
-            console.log(`[AutoLogin] 🔄 Switching to fresh login form...`);
-            await switchAccountBtn.click();
-            await page.waitForTimeout(3000);
-        }
-
-        // 2. ĐIỀN FORM LOGIN
-        const emailInput = page.locator('input[name="email"], input[id="email"], input[aria-label*="Email"]').first();
-        const passInput = page.locator('input[name="pass"], input[id="pass"], input[aria-label*="mật khẩu"]').first();
-        const loginBtn = page.locator('button[name="login"], button[type="submit"]:has-text("Đăng nhập"), button:has-text("Log In")').first();
-
-        if (await emailInput.isVisible()) {
-            await emailInput.fill(accData.uid);
-            await passInput.fill(accData.pass);
-            await loginBtn.click();
-            await page.waitForTimeout(5000);
-        } else {
-            const continueBtn = page.locator('button:has-text("Tiếp tục"), button:has-text("Continue")').first();
-            if (await continueBtn.isVisible()) {
-                await continueBtn.click();
-                await page.waitForTimeout(5000);
-            }
-        }
-
-        // 3. KIỂM TRA 2FA
-        let currentUrl = page.url();
-        if (currentUrl.includes('checkpoint')) {
-            console.log(`[AutoLogin] 🔑 2FA Required...`);
-
-            // Bấm qua các màn hình trung gian nếu có
-            const cpContinue = page.locator('button:has-text("Tiếp tục"), button:has-text("Continue"), button[id="checkpointSubmitButton"]').first();
-            if (await cpContinue.isVisible()) {
-                await cpContinue.click();
-                await page.waitForTimeout(4000);
-            }
-
-            const otpInput = page.locator('input[type="text"], input[name="approvals_code"], input[placeholder*="6 chữ số"]').first();
-            if (await otpInput.isVisible() && accData.twoFactorSecret) {
-                const token = authenticator.generate(accData.twoFactorSecret.replace(/\s+/g, ''));
-                console.log(`[AutoLogin] 🎰 Generated 2FA Code: ${token}`);
-                await otpInput.fill(token);
-
-                const submitBtn = page.locator('button:has-text("Tiếp tục"), button:has-text("Continue"), button[id="checkpointSubmitButton"]').first();
-                await submitBtn.click();
-                await page.waitForTimeout(5000);
-
-                // Tin cậy trình duyệt
-                const trustBtn = page.locator('button:has-text("Tiếp tục"), button:has-text("Continue"), button[id="checkpointSubmitButton"]').first();
-                if (await trustBtn.isVisible()) {
-                    await trustBtn.click();
-                    await page.waitForTimeout(5000);
-                }
-            }
-        }
-
-        // 4. XÁC NHẬN THÀNH CÔNG
-        await page.goto('https://www.facebook.com', { waitUntil: 'domcontentloaded' });
-        if (page.url().includes('login') || page.url().includes('checkpoint')) {
-            console.error(`[AutoLogin] ❌ Login failed for ${accData.name}`);
-            return false;
-        }
-
-        console.log(`[AutoLogin] ✅ Login SUCCESS. Updating cookies...`);
-        const latestCookies = await page.context().cookies();
-        fs.writeFileSync(cookiesPath, JSON.stringify({ cookies: latestCookies }, null, 4), 'utf8');
-        return true;
-
-    } catch (e) {
-        console.error(`[AutoLogin] ❌ Critical Error: ${e.message}`);
-        return false;
-    }
-}
 
 async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName, accData = null, threadId = null) {
     const cookiesPath = specificCookiePath || process.env.FB_COOKIES_PATH || path.resolve(__dirname, '../cookies.json');
@@ -192,19 +102,12 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName, a
         console.log(`[Scraper] Navigating to Inbox: ${inboxUrl}`);
         await page.goto(inboxUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-        // ===== PHÁT HIỆN COOKIES HẾT HẠN - KÍCH HOẠT AUTO LOGIN =====
+        // ===== PHÁT HIỆN COOKIES HẾT HẠN =====
         await page.waitForTimeout(4000);
         let currentUrl = page.url();
         if (currentUrl.includes('login') || currentUrl.includes('checkpoint')) {
-            console.log(`[Scraper] ❌ COOKIES EXPIRED! Starting Auto Login for ${accData?.name || 'Account'}...`);
-            const loginSuccess = await handleAutoLogin(page, accData, cookiesPath);
-            if (!loginSuccess) {
-                console.error(`[Scraper] 🛑 Recovery failed. Aborting.`);
-                return null;
-            }
-            // Sau khi login xong, quay lại Inbox
-            await page.goto(inboxUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
-            await page.waitForTimeout(4000);
+            console.log(`[Scraper] ❌ COOKIES EXPIRED for ${accData?.name || 'Account'}`);
+            return null;
         }
 
         // ===== KIỂM TRA UI & RELOAD (Phòng chống trang trắng/lag) =====
@@ -455,10 +358,8 @@ async function refreshAccount(specificCookiePath, accData = null) {
 
         let currentUrl = page.url();
         if (currentUrl.includes('login') || currentUrl.includes('checkpoint')) {
-            console.log(`[Maintenance] ❌ Session EXPIRED for ${accData?.name || 'Account'}. Auto Logging...`);
-            const loginSuccess = await handleAutoLogin(page, accData, cookiesPath);
-            if (!loginSuccess) return false;
-            await page.goto('https://www.facebook.com', { waitUntil: 'domcontentloaded' });
+            console.log(`[Maintenance] ❌ Cookies EXPIRED for ${accData?.name || 'Account'}`);
+            return false;
         }
 
         // Cuộn trang nhẹ nhàng như người thật
