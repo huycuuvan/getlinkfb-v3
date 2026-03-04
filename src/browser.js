@@ -189,25 +189,43 @@ async function scrapeUserProfile(psid, pageId, specificCookiePath, targetName, a
 
                 if (checkMatchFuzzy(uiNameRaw, rawTarget)) {
                     isMatch = true;
+                    console.log(`[Scraper] 🎯 UI Match confirmed for: ${uiNameRaw.substring(0, 30)}`);
                     break;
+                } else if (i === 0) {
+                    console.log(`[Scraper] ⚠️ UI Mismatch (Found: "${uiNameRaw.substring(0, 50)}")`);
                 }
 
                 // NẾU CỐ GẮNG BẰNG URL VẪN SAI ID -> DÙNG SEARCH BOX (CỰC KỲ QUAN TRỌNG)
                 if (i === 1) {
-                    console.log(`[Scraper] 🔍 Navigation failed to land on target. Attempting Search Fallback...`);
+                    console.log(`[Scraper] 🔍 Navigation mismatch. Attempting Search Fallback for "${rawTarget}"...`);
                     try {
                         const searchInput = page.locator('input[placeholder*="Tìm kiếm"], input[placeholder*="Search"]').first();
                         if (await searchInput.isVisible()) {
                             await searchInput.click();
-                            await page.keyboard.type(rawTarget, { delay: 100 });
-                            await page.waitForTimeout(3000);
+                            // Xóa sạch ô search cũ (nếu có)
+                            await page.keyboard.press('Control+A');
+                            await page.keyboard.press('Backspace');
+                            await page.waitForTimeout(500);
 
-                            // Click vào kết quả đầu tiên xuất hiện
-                            const firstResult = page.locator('div[role="grid"] [role="row"], [role="listbox"] [role="option"]').first();
+                            await page.keyboard.type(rawTarget, { delay: 100 });
+                            await page.waitForTimeout(3000); // Đợi kết quả hiện lên
+
+                            // Click vào kết quả đầu tiên (thường là list item chứa tên)
+                            // Sử dụng selector linh hoạt hơn để bắt được kết quả search
+                            const firstResult = page.locator('[role="listbox"] [role="option"], [role="grid"] [role="row"], div[role="button"]:has-text("' + rawTarget.split(' ').pop() + '")').first();
+
                             if (await firstResult.isVisible()) {
+                                console.log(`[Scraper] 🎯 Search result found. Clicking...`);
                                 await firstResult.click();
-                                console.log(`[Scraper] 🎯 Search & Clicked on result for: ${rawTarget}`);
-                                await page.waitForTimeout(2000);
+                                await page.waitForTimeout(4000);
+                            } else {
+                                console.log(`[Scraper] ⚠️ Search result for "${rawTarget}" not visible.`);
+                                // Thử click đại vào cái gì đó trong vùng search kết quả nếu không thấy ID cụ thể
+                                const anyResult = page.locator('div[role="main"] div[role="button"]').filter({ hasText: rawTarget.split(' ').pop() }).first();
+                                if (await anyResult.isVisible()) {
+                                    await anyResult.click();
+                                    await page.waitForTimeout(4000);
+                                }
                             }
                         }
                     } catch (se) {
