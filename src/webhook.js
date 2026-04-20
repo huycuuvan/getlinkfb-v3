@@ -185,6 +185,33 @@ async function sendToN8N(payload) {
     }
 }
 
+async function sendToOhari(payload) {
+    const url = 'https://staging.ohari.jp/api/n8n-message';
+    const apiKey = 'staging_n8n_key_123456';
+
+    const ohariPayload = {
+        page_id: payload.page_id,
+        ps_id: payload.ps_id,
+        m_id: payload.m_id,
+        time_stamp: payload.time_stamp,
+        customer_name: payload.customer_name,
+        customer_facebook_url: payload.customer_facebook_url,
+        extracted_phone_number: payload.extracted_phone_number,
+        lead_source: 'CUSTOMER_PROVIDED'
+    };
+
+    try {
+        console.log(`[Ohari] Sending Payload:`, JSON.stringify(ohariPayload, null, 2));
+        await axios.post(url, ohariPayload, {
+            headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+            timeout: 10000
+        });
+        console.log(`[Ohari] Success: ${payload.ps_id} (${payload.customer_name})`);
+    } catch (error) {
+        console.error(`[Ohari] Error for ${payload.ps_id}: ${error.message}`);
+    }
+}
+
 async function processMessage(psid, pageConfig, pageId, messageText, messageId, timestamp) {
     const phoneNumber = extractPhoneNumber(messageText);
     const accessToken = pageConfig.page_access_token;
@@ -306,7 +333,10 @@ async function processMessage(psid, pageConfig, pageId, messageText, messageId, 
             "text": messageText,
             "extracted_phone_number": phoneNumber
         };
-        await sendToN8N(n8nPayload);
+        await Promise.allSettled([
+            sendToN8N(n8nPayload),
+            sendToOhari(n8nPayload)
+        ]);
     } else {
         console.log(`[Process] Skipping N8N for ${psid} (No link or System user)`);
     }
