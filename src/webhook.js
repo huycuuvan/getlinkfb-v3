@@ -186,8 +186,8 @@ async function sendToN8N(payload) {
 }
 
 async function sendToOhari(payload) {
-    const url = 'https://staging.ohari.jp/api/n8n-message';
-    const apiKey = 'staging_n8n_key_123456';
+    const url = 'https://empire.ohari.jp/api/n8n-message';
+    const apiKey = process.env.OHARI_API_KEY;
 
     const ohariPayload = {
         page_id: payload.page_id,
